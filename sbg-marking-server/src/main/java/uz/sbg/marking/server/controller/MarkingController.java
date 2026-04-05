@@ -3,12 +3,15 @@ package uz.sbg.marking.server.controller;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 import uz.sbg.marking.contracts.FifoByProductResponse;
 import uz.sbg.marking.contracts.HistoryQueryResponse;
 import uz.sbg.marking.contracts.ImportRequest;
@@ -21,6 +24,7 @@ import uz.sbg.marking.contracts.ResolveAndReserveResponse;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveRequest;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveResponse;
 import uz.sbg.marking.server.model.MarkRecord;
+import uz.sbg.marking.server.service.MarkingExcelImportService;
 import uz.sbg.marking.server.service.MarkingService;
 
 import java.time.Instant;
@@ -30,9 +34,11 @@ import java.util.List;
 @RequestMapping("/api/v1")
 public class MarkingController {
     private final MarkingService markingService;
+    private final MarkingExcelImportService excelImportService;
 
-    public MarkingController(MarkingService markingService) {
+    public MarkingController(MarkingService markingService, MarkingExcelImportService excelImportService) {
         this.markingService = markingService;
+        this.excelImportService = excelImportService;
     }
 
     @PostMapping("/marking/resolve-and-reserve")
@@ -72,6 +78,20 @@ public class MarkingController {
 
     @PostMapping("/km/import/delta")
     public ResponseEntity<ImportResponse> importDelta(@RequestBody ImportRequest request) {
+        return ResponseEntity.ok(markingService.importDelta(request));
+    }
+
+    @PostMapping(value = "/km/import/full/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ImportResponse> importFullExcel(@RequestParam("file") MultipartFile file,
+                                                          @RequestParam(name = "batchId", required = false) String batchId) {
+        ImportRequest request = parseExcelRequest(file, batchId);
+        return ResponseEntity.ok(markingService.importFull(request));
+    }
+
+    @PostMapping(value = "/km/import/delta/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ImportResponse> importDeltaExcel(@RequestParam("file") MultipartFile file,
+                                                           @RequestParam(name = "batchId", required = false) String batchId) {
+        ImportRequest request = parseExcelRequest(file, batchId);
         return ResponseEntity.ok(markingService.importDelta(request));
     }
 
@@ -121,5 +141,13 @@ public class MarkingController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"sbg-marking-history.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(csv);
+    }
+
+    private ImportRequest parseExcelRequest(MultipartFile file, String batchId) {
+        try {
+            return excelImportService.parseImportRequest(file, batchId);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
     }
 }

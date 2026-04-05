@@ -32,3 +32,4 @@ This folder contains ready-to-run Postman artifacts for manual E2E checks.
 - To test idempotency, repeat the same request without changing `operationId` variables.
 - FIFO debug request shows why each mark is selected or skipped (`reason`) for the current product filter.
 - History supports filters (`eventType`, `shopId`, `posId`, `cashierId`, `success`) and CSV export via `/api/v1/reports/history.csv`.
+- Excel import is available via `/api/v1/km/import/full/excel` and `/api/v1/km/import/delta/excel` (see `docs/km-import-excel.md`).

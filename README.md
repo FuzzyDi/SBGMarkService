@@ -96,6 +96,8 @@ Flyway migration is applied on startup from:
 - `POST /api/v1/marking/return-release`
 - `POST /api/v1/km/import/full`
 - `POST /api/v1/km/import/delta`
+- `POST /api/v1/km/import/full/excel` (`multipart/form-data`)
+- `POST /api/v1/km/import/delta/excel` (`multipart/form-data`)
 - `GET /api/v1/reports/summary`
 - `GET /api/v1/reports/history` (supports filters: `eventType`, `shopId`, `posId`, `cashierId`, `success`, `markCode`, `from`, `to`, `limit`)
 - `GET /api/v1/reports/history.csv` (same filters, CSV export)
@@ -106,6 +108,7 @@ Flyway migration is applied on startup from:
 
 - Full cashier flow checklist: `docs/e2e-staging-cashier-checklist.md`
 - Postman collection and environment: `docs/postman/`
+- Excel import guide: `docs/km-import-excel.md`
 
 ## FIFO and lifecycle
 

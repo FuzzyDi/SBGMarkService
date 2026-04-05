@@ -1,11 +1,16 @@
 package uz.sbg.marking.server.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import uz.sbg.marking.contracts.ImportMarkItem;
@@ -14,9 +19,12 @@ import uz.sbg.marking.contracts.MarkStatus;
 import uz.sbg.marking.contracts.ProductRef;
 import uz.sbg.marking.contracts.ResolveAndReserveRequest;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -199,6 +207,64 @@ class MarkingControllerIntegrationTest {
                 .andExpect(jsonPath("$.candidates[1].reason").value("BLOCKED_FLAG_TRUE"));
     }
 
+    @Test
+    void excelImportEndpointShouldImportAndBeUsedForResolve() throws Exception {
+        byte[] excel = createExcelFile(new String[][]{
+                {"markCode", "item", "gtin", "productType", "valid", "blocked", "status", "fifoTsEpochMs"},
+                {"KM-XL-1", "ITEM-XL", "GTIN-XL", "TOBACCO", "true", "false", "AVAILABLE", "1000"},
+                {"KM-XL-2", "ITEM-XL", "GTIN-XL", "TOBACCO", "1", "0", "AVAILABLE", "2000"}
+        });
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "km-import.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                excel
+        );
+
+        mockMvc.perform(multipart("/api/v1/km/import/full/excel")
+                        .file(file)
+                        .param("batchId", "excel-batch-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.batchId").value("excel-batch-1"))
+                .andExpect(jsonPath("$.added").value(2));
+
+        ResolveAndReserveRequest resolveRequest = new ResolveAndReserveRequest();
+        resolveRequest.setOperationId("api-op-sale-xl-1");
+        resolveRequest.setShopId("1");
+        resolveRequest.setPosId("1");
+        resolveRequest.setCashierId("cashier-xl");
+        resolveRequest.setScannedMark("NOT-IN-POOL");
+        resolveRequest.setQuantity(1);
+
+        ProductRef product = new ProductRef();
+        product.setProductType("TOBACCO");
+        product.setItem("ITEM-XL");
+        product.setGtin("GTIN-XL");
+        resolveRequest.setProduct(product);
+
+        mockMvc.perform(post("/api/v1/marking/resolve-and-reserve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resolveRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("ACCEPT_AUTO_SELECTED"))
+                .andExpect(jsonPath("$.appliedMark").value("KM-XL-1"));
+    }
+
+    @Test
+    void excelImportEndpointShouldReturnBadRequestForInvalidFile() throws Exception {
+        MockMultipartFile invalidFile = new MockMultipartFile(
+                "file",
+                "invalid.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "not-an-excel".getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/v1/km/import/full/excel")
+                        .file(invalidFile))
+                .andExpect(status().isBadRequest());
+    }
+
     private ImportMarkItem mark(String code, long fifoTsEpochMs) {
         ImportMarkItem item = new ImportMarkItem();
         item.setMarkCode(code);
@@ -210,5 +276,21 @@ class MarkingControllerIntegrationTest {
         item.setStatus(MarkStatus.AVAILABLE);
         item.setFifoTsEpochMs(fifoTsEpochMs);
         return item;
+    }
+
+    private byte[] createExcelFile(String[][] rows) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("km");
+            for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+                Row row = sheet.createRow(rowIndex);
+                String[] values = rows[rowIndex];
+                for (int colIndex = 0; colIndex < values.length; colIndex++) {
+                    row.createCell(colIndex).setCellValue(values[colIndex]);
+                }
+            }
+            workbook.write(out);
+            return out.toByteArray();
+        }
     }
 }

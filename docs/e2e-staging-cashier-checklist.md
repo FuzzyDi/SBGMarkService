@@ -47,6 +47,13 @@ Expected:
 - `firstSelectableMark` shows mark that will be auto-selected
 - `candidates[*].reason` explains why mark is selectable or skipped
 
+Optional Excel import:
+
+```powershell
+$file = Get-Item "C:\Temp\km-import.xlsx"
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/km/import/full/excel?batchId=e2e-excel-1" -Form @{ file = $file }
+```
+
 ## 3) Sale flow (cashier)
 
 1. Cashier scans product barcode of marked item.
