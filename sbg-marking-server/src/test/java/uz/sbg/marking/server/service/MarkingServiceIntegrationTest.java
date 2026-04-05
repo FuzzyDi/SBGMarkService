@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import uz.sbg.marking.contracts.FifoByProductResponse;
+import uz.sbg.marking.contracts.HistoryQueryResponse;
 import uz.sbg.marking.contracts.ImportMarkItem;
 import uz.sbg.marking.contracts.ImportRequest;
 import uz.sbg.marking.contracts.MarkOperationRequest;
@@ -142,6 +143,61 @@ class MarkingServiceIntegrationTest {
         markingService.scheduledCleanup();
 
         assertThat(idempotencyEntryRepository.findByRouteAndOperationId("resolve", "op-old-idem")).isEmpty();
+    }
+
+    @Test
+    void shouldFilterHistoryAndExportCsv() {
+        importMarks(List.of(
+                mark("KM-H-1", "ITEM-H", "GTIN-H", "TOBACCO", true, false, MarkStatus.AVAILABLE, 1000L),
+                mark("KM-H-2", "ITEM-H", "GTIN-H", "TOBACCO", true, false, MarkStatus.AVAILABLE, 2000L)
+        ));
+
+        ResolveAndReserveRequest first = saleResolveRequest("op-hist-1", "NOT-IN-DB-1", "ITEM-H", "GTIN-H", "TOBACCO");
+        first.setShopId("SHOP-A");
+        first.setPosId("POS-A");
+        first.setCashierId("CASH-A");
+        markingService.resolveAndReserve(first);
+
+        ResolveAndReserveRequest second = saleResolveRequest("op-hist-2", "NOT-IN-DB-2", "ITEM-H", "GTIN-H", "TOBACCO");
+        second.setShopId("SHOP-B");
+        second.setPosId("POS-B");
+        second.setCashierId("CASH-B");
+        markingService.resolveAndReserve(second);
+
+        HistoryQueryResponse filtered = markingService.queryHistory(
+                null,
+                null,
+                null,
+                100,
+                "SALE_RESOLVE",
+                "SHOP-A",
+                null,
+                "CASH-A",
+                true
+        );
+
+        assertThat(filtered.getTotal()).isEqualTo(1);
+        assertThat(filtered.getEvents()).hasSize(1);
+        assertThat(filtered.getEvents().get(0).getEventType()).isEqualTo("SALE_RESOLVE");
+        assertThat(filtered.getEvents().get(0).getShopId()).isEqualTo("SHOP-A");
+        assertThat(filtered.getEvents().get(0).getCashierId()).isEqualTo("CASH-A");
+
+        String csv = markingService.exportHistoryCsv(
+                null,
+                null,
+                null,
+                100,
+                "SALE_RESOLVE",
+                "SHOP-A",
+                null,
+                "CASH-A",
+                true
+        );
+
+        assertThat(csv).contains("timestamp,eventType,operationId");
+        assertThat(csv).contains("SALE_RESOLVE");
+        assertThat(csv).contains("SHOP-A");
+        assertThat(csv).doesNotContain("SHOP-B");
     }
 
     private void importMarks(List<ImportMarkItem> items) {

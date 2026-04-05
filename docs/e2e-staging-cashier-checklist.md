@@ -123,9 +123,13 @@ Check:
 
 ```powershell
 Invoke-RestMethod "http://localhost:8080/api/v1/reports/history?limit=100"
+Invoke-RestMethod "http://localhost:8080/api/v1/reports/history?eventType=SALE_RESOLVE&cashierId=cashier-api&success=true&limit=50"
+Invoke-WebRequest "http://localhost:8080/api/v1/reports/history.csv?eventType=SALE_RESOLVE&success=true&limit=50" | Select-Object -ExpandProperty Content
 Invoke-RestMethod http://localhost:8080/api/v1/reports/summary
 ```
 
 Expected:
 - history includes `SALE_RESOLVE`, `SALE_CONFIRM`, `RETURN_RESOLVE`, `RETURN_CONFIRM`
+- filtered history returns only requested subset
+- CSV export includes header and filtered events
 - counters in summary match performed operations

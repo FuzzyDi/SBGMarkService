@@ -21,6 +21,8 @@ This folder contains ready-to-run Postman artifacts for manual E2E checks.
    - `Return Success Flow / Return Confirm`
    - `Reports / Summary`
    - `Reports / History`
+   - `Reports / History (filtered)`
+   - `Reports / History.csv (filtered)`
    - `Reports / GET /api/v1/km/debug/fifo-by-product`
 
 ## Notes
@@ -29,3 +31,4 @@ This folder contains ready-to-run Postman artifacts for manual E2E checks.
 - `Sale Cancel Flow` and `Return Cancel Flow` are optional and demonstrate `sale-release` and `return-release`.
 - To test idempotency, repeat the same request without changing `operationId` variables.
 - FIFO debug request shows why each mark is selected or skipped (`reason`) for the current product filter.
+- History supports filters (`eventType`, `shopId`, `posId`, `cashierId`, `success`) and CSV export via `/api/v1/reports/history.csv`.

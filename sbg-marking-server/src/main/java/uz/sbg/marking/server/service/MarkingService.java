@@ -538,13 +538,21 @@ public class MarkingService {
     }
 
     public HistoryQueryResponse queryHistory(String markCode, Instant from, Instant to, Integer limit) {
+        return queryHistory(markCode, from, to, limit, null, null, null, null, null);
+    }
+
+    public HistoryQueryResponse queryHistory(String markCode,
+                                             Instant from,
+                                             Instant to,
+                                             Integer limit,
+                                             String eventType,
+                                             String shopId,
+                                             String posId,
+                                             String cashierId,
+                                             Boolean success) {
         synchronized (monitor) {
             int maxItems = limit == null ? 200 : Math.max(1, Math.min(5000, limit));
-            List<MarkingHistoryEvent> filtered = history.stream()
-                    .filter(event -> isBlank(markCode) || markCode.equals(event.getMarkCode()))
-                    .filter(event -> from == null || !event.getTimestamp().isBefore(from))
-                    .filter(event -> to == null || !event.getTimestamp().isAfter(to))
-                    .collect(Collectors.toList());
+            List<MarkingHistoryEvent> filtered = filterHistory(markCode, from, to, eventType, shopId, posId, cashierId, success);
 
             int total = filtered.size();
             int fromIndex = Math.max(0, total - maxItems);
@@ -553,6 +561,45 @@ public class MarkingService {
             response.setTotal(total);
             response.setEvents(new ArrayList<>(filtered.subList(fromIndex, total)));
             return response;
+        }
+    }
+
+    public String exportHistoryCsv(String markCode,
+                                   Instant from,
+                                   Instant to,
+                                   Integer limit,
+                                   String eventType,
+                                   String shopId,
+                                   String posId,
+                                   String cashierId,
+                                   Boolean success) {
+        synchronized (monitor) {
+            int maxItems = limit == null ? 5000 : Math.max(1, Math.min(10000, limit));
+            List<MarkingHistoryEvent> filtered = filterHistory(markCode, from, to, eventType, shopId, posId, cashierId, success);
+            int fromIndex = Math.max(0, filtered.size() - maxItems);
+            List<MarkingHistoryEvent> events = filtered.subList(fromIndex, filtered.size());
+
+            StringBuilder csv = new StringBuilder();
+            csv.append("timestamp,eventType,operationId,markCode,reservationId,productType,item,gtin,shopId,posId,cashierId,receiptId,success,errorCode,message\n");
+            for (MarkingHistoryEvent event : events) {
+                csv.append(csvCell(event == null || event.getTimestamp() == null ? null : event.getTimestamp().toString())).append(',')
+                        .append(csvCell(event == null ? null : event.getEventType())).append(',')
+                        .append(csvCell(event == null ? null : event.getOperationId())).append(',')
+                        .append(csvCell(event == null ? null : event.getMarkCode())).append(',')
+                        .append(csvCell(event == null ? null : event.getReservationId())).append(',')
+                        .append(csvCell(event == null ? null : event.getProductType())).append(',')
+                        .append(csvCell(event == null ? null : event.getItem())).append(',')
+                        .append(csvCell(event == null ? null : event.getGtin())).append(',')
+                        .append(csvCell(event == null ? null : event.getShopId())).append(',')
+                        .append(csvCell(event == null ? null : event.getPosId())).append(',')
+                        .append(csvCell(event == null ? null : event.getCashierId())).append(',')
+                        .append(csvCell(event == null ? null : event.getReceiptId())).append(',')
+                        .append(csvCell(event == null ? null : Boolean.toString(event.isSuccess()))).append(',')
+                        .append(csvCell(event == null || event.getErrorCode() == null ? null : event.getErrorCode().name())).append(',')
+                        .append(csvCell(event == null ? null : event.getMessage()))
+                        .append('\n');
+            }
+            return csv.toString();
         }
     }
 
@@ -938,6 +985,37 @@ public class MarkingService {
         event.setProductType(product.getProductType());
         event.setItem(product.getItem());
         event.setGtin(product.getGtin());
+    }
+
+    private List<MarkingHistoryEvent> filterHistory(String markCode,
+                                                    Instant from,
+                                                    Instant to,
+                                                    String eventType,
+                                                    String shopId,
+                                                    String posId,
+                                                    String cashierId,
+                                                    Boolean success) {
+        return history.stream()
+                .filter(event -> isBlank(markCode) || markCode.equals(event.getMarkCode()))
+                .filter(event -> isBlank(eventType) || eventType.equals(event.getEventType()))
+                .filter(event -> isBlank(shopId) || shopId.equals(event.getShopId()))
+                .filter(event -> isBlank(posId) || posId.equals(event.getPosId()))
+                .filter(event -> isBlank(cashierId) || cashierId.equals(event.getCashierId()))
+                .filter(event -> success == null || success.booleanValue() == event.isSuccess())
+                .filter(event -> from == null || (event.getTimestamp() != null && !event.getTimestamp().isBefore(from)))
+                .filter(event -> to == null || (event.getTimestamp() != null && !event.getTimestamp().isAfter(to)))
+                .collect(Collectors.toList());
+    }
+
+    private String csvCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") || escaped.contains("\r")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 
     private <T> T findIdempotent(String route,

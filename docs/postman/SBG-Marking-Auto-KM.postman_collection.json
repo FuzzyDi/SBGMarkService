@@ -538,6 +538,59 @@
           }
         },
         {
+          "name": "GET /api/v1/reports/history (filtered)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"filtered history payload contains events array\", function () {",
+                  "  pm.expect(data).to.have.property(\"events\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reports/history?eventType=SALE_RESOLVE&cashierId={{cashierId}}&success=true&limit=20"
+          }
+        },
+        {
+          "name": "GET /api/v1/reports/history.csv (filtered)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const contentType = pm.response.headers.get(\"Content-Type\") || \"\";",
+                  "pm.test(\"content type is csv\", function () {",
+                  "  pm.expect(contentType).to.include(\"text/csv\");",
+                  "});",
+                  "pm.test(\"csv has header\", function () {",
+                  "  pm.expect(pm.response.text()).to.include(\"timestamp,eventType,operationId\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reports/history.csv?eventType=SALE_RESOLVE&cashierId={{cashierId}}&success=true&limit=20"
+          }
+        },
+        {
           "name": "GET /api/v1/km/debug/marks",
           "event": [
             {

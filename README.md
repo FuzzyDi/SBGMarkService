@@ -97,7 +97,8 @@ Flyway migration is applied on startup from:
 - `POST /api/v1/km/import/full`
 - `POST /api/v1/km/import/delta`
 - `GET /api/v1/reports/summary`
-- `GET /api/v1/reports/history`
+- `GET /api/v1/reports/history` (supports filters: `eventType`, `shopId`, `posId`, `cashierId`, `success`, `markCode`, `from`, `to`, `limit`)
+- `GET /api/v1/reports/history.csv` (same filters, CSV export)
 - `GET /api/v1/km/debug/marks`
 - `GET /api/v1/km/debug/fifo-by-product?productType=...&item=...&gtin=...&limit=...`
 

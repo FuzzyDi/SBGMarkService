@@ -18,6 +18,8 @@ import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -109,6 +111,59 @@ class MarkingControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$.events").isArray());
+    }
+
+    @Test
+    void reportsHistoryShouldSupportFiltersAndCsvExport() throws Exception {
+        ImportRequest importRequest = new ImportRequest();
+        importRequest.setBatchId("api-batch-4");
+        importRequest.setItems(List.of(mark("KM-HIST-1", 1000L)));
+
+        mockMvc.perform(post("/api/v1/km/import/full")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(importRequest)))
+                .andExpect(status().isOk());
+
+        ResolveAndReserveRequest resolveRequest = new ResolveAndReserveRequest();
+        resolveRequest.setOperationId("api-op-sale-4");
+        resolveRequest.setShopId("SHOP-CSV");
+        resolveRequest.setPosId("POS-CSV");
+        resolveRequest.setCashierId("CASH-CSV");
+        resolveRequest.setScannedMark("NOT-IN-POOL");
+        resolveRequest.setQuantity(1);
+
+        ProductRef product = new ProductRef();
+        product.setProductType("TOBACCO");
+        product.setItem("ITEM-1");
+        product.setGtin("GTIN-1");
+        resolveRequest.setProduct(product);
+
+        mockMvc.perform(post("/api/v1/marking/resolve-and-reserve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resolveRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("ACCEPT_AUTO_SELECTED"));
+
+        mockMvc.perform(get("/api/v1/reports/history")
+                        .param("eventType", "SALE_RESOLVE")
+                        .param("cashierId", "CASH-CSV")
+                        .param("success", "true")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.events[0].eventType").value("SALE_RESOLVE"))
+                .andExpect(jsonPath("$.events[0].cashierId").value("CASH-CSV"));
+
+        mockMvc.perform(get("/api/v1/reports/history.csv")
+                        .param("eventType", "SALE_RESOLVE")
+                        .param("cashierId", "CASH-CSV")
+                        .param("success", "true")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/csv"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("sbg-marking-history.csv")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("SALE_RESOLVE")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("CASH-CSV")));
     }
 
     @Test

@@ -1,5 +1,7 @@
 package uz.sbg.marking.server.controller;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -95,7 +97,29 @@ public class MarkingController {
     public ResponseEntity<HistoryQueryResponse> history(@RequestParam(name = "markCode", required = false) String markCode,
                                                         @RequestParam(name = "from", required = false) Instant from,
                                                         @RequestParam(name = "to", required = false) Instant to,
-                                                        @RequestParam(name = "limit", required = false) Integer limit) {
-        return ResponseEntity.ok(markingService.queryHistory(markCode, from, to, limit));
+                                                        @RequestParam(name = "limit", required = false) Integer limit,
+                                                        @RequestParam(name = "eventType", required = false) String eventType,
+                                                        @RequestParam(name = "shopId", required = false) String shopId,
+                                                        @RequestParam(name = "posId", required = false) String posId,
+                                                        @RequestParam(name = "cashierId", required = false) String cashierId,
+                                                        @RequestParam(name = "success", required = false) Boolean success) {
+        return ResponseEntity.ok(markingService.queryHistory(markCode, from, to, limit, eventType, shopId, posId, cashierId, success));
+    }
+
+    @GetMapping(value = "/reports/history.csv", produces = "text/csv")
+    public ResponseEntity<String> historyCsv(@RequestParam(name = "markCode", required = false) String markCode,
+                                             @RequestParam(name = "from", required = false) Instant from,
+                                             @RequestParam(name = "to", required = false) Instant to,
+                                             @RequestParam(name = "limit", required = false) Integer limit,
+                                             @RequestParam(name = "eventType", required = false) String eventType,
+                                             @RequestParam(name = "shopId", required = false) String shopId,
+                                             @RequestParam(name = "posId", required = false) String posId,
+                                             @RequestParam(name = "cashierId", required = false) String cashierId,
+                                             @RequestParam(name = "success", required = false) Boolean success) {
+        String csv = markingService.exportHistoryCsv(markCode, from, to, limit, eventType, shopId, posId, cashierId, success);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"sbg-marking-history.csv\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 }
