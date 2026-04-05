@@ -1,6 +1,14 @@
 name: SBG Set10 Plugin Build
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "sbg-set10-marking-plugin/**"
+      - "sbg-marking-contracts/**"
+      - "pom.xml"
+      - ".github/workflows/plugin-build.yml"
   workflow_dispatch:
   pull_request:
     branches:

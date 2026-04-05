@@ -1,4 +1,6 @@
 # sbg-marking-auto-km
+[![SBG Marking CI](https://github.com/FuzzyDi/SBGMarkService/actions/workflows/ci.yml/badge.svg)](https://github.com/FuzzyDi/SBGMarkService/actions/workflows/ci.yml)
+[![SBG Set10 Plugin Build](https://github.com/FuzzyDi/SBGMarkService/actions/workflows/plugin-build.yml/badge.svg)](https://github.com/FuzzyDi/SBGMarkService/actions/workflows/plugin-build.yml)
 
 Multi-module Maven project for automatic KM substitution in Set Retail 10:
 
