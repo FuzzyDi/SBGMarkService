@@ -48,6 +48,11 @@ mvn spring-boot:run
 
 Default server URL: `http://localhost:8080`
 
+Server Web UI:
+
+- Open `http://localhost:8080/`
+- UI supports Excel/JSON import, resolve/confirm/release calls, FIFO debug, and reports/history CSV.
+
 ## Run PostgreSQL (docker)
 
 ```powershell

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SBG Marking Server UI</title>
+    <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<div class="bg-shape bg-shape-1"></div>
+<div class="bg-shape bg-shape-2"></div>
+
+<main class="layout">
+    <header class="hero card">
+        <div class="hero-top">
+            <span class="badge">SBG Marking</span>
+            <span id="healthBadge" class="status status-neutral">unknown</span>
+        </div>
+        <h1>Server Control Panel</h1>
+        <p class="lead">
+            Unified UI for KM import, FIFO diagnostics, sale/return flow, and reporting.
+        </p>
+        <div class="base-url-row">
+            <label for="baseUrl">Base URL</label>
+            <input id="baseUrl" type="text" value="">
+            <button id="btnHealth" type="button">Check Health</button>
+            <button id="btnSummary" type="button">Load Summary</button>
+        </div>
+    </header>
+
+    <section class="grid-2">
+        <article class="card">
+            <h2>Excel Import</h2>
+            <form id="excelImportForm">
+                <label for="excelMode">Mode</label>
+                <select id="excelMode">
+                    <option value="full">Full</option>
+                    <option value="delta">Delta</option>
+                </select>
+
+                <label for="excelBatchId">Batch ID (optional)</label>
+                <input id="excelBatchId" type="text" placeholder="excel-batch-1">
+
+                <label for="excelFile">XLSX File</label>
+                <input id="excelFile" type="file" accept=".xlsx,.xls">
+
+                <button type="submit">Upload Excel</button>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>JSON Import</h2>
+            <form id="jsonImportForm">
+                <label for="jsonMode">Mode</label>
+                <select id="jsonMode">
+                    <option value="full">Full</option>
+                    <option value="delta">Delta</option>
+                </select>
+
+                <label for="jsonPayload">Payload</label>
+                <textarea id="jsonPayload" rows="10"></textarea>
+
+                <button type="submit">Send JSON Import</button>
+            </form>
+        </article>
+    </section>
+
+    <section class="grid-2">
+        <article class="card">
+            <h2>Sale Resolve</h2>
+            <form id="saleResolveForm">
+                <label for="saleOperationId">Operation ID</label>
+                <input id="saleOperationId" type="text">
+
+                <label for="saleShopId">Shop ID</label>
+                <input id="saleShopId" type="text" value="SHOP-01">
+
+                <label for="salePosId">POS ID</label>
+                <input id="salePosId" type="text" value="POS-01">
+
+                <label for="saleCashierId">Cashier ID</label>
+                <input id="saleCashierId" type="text" value="CASHIER-01">
+
+                <label for="saleBarcode">Barcode</label>
+                <input id="saleBarcode" type="text" value="1234567890123">
+
+                <label for="saleItem">Item</label>
+                <input id="saleItem" type="text" value="ITEM-1">
+
+                <label for="saleGtin">GTIN</label>
+                <input id="saleGtin" type="text" value="GTIN-1">
+
+                <label for="saleProductType">Product Type</label>
+                <input id="saleProductType" type="text" value="TOBACCO">
+
+                <label for="saleScannedMark">Scanned Mark</label>
+                <input id="saleScannedMark" type="text" value="NOT-IN-POOL">
+
+                <label for="saleQuantity">Quantity</label>
+                <input id="saleQuantity" type="number" min="1" step="1" value="1">
+
+                <button type="submit">Resolve and Reserve</button>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>Return Resolve</h2>
+            <form id="returnResolveForm">
+                <label for="returnOperationId">Operation ID</label>
+                <input id="returnOperationId" type="text">
+
+                <label for="returnShopId">Shop ID</label>
+                <input id="returnShopId" type="text" value="SHOP-01">
+
+                <label for="returnPosId">POS ID</label>
+                <input id="returnPosId" type="text" value="POS-01">
+
+                <label for="returnCashierId">Cashier ID</label>
+                <input id="returnCashierId" type="text" value="CASHIER-01">
+
+                <label for="returnItem">Item</label>
+                <input id="returnItem" type="text" value="ITEM-1">
+
+                <label for="returnGtin">GTIN</label>
+                <input id="returnGtin" type="text" value="GTIN-1">
+
+                <label for="returnProductType">Product Type</label>
+                <input id="returnProductType" type="text" value="TOBACCO">
+
+                <label for="returnScannedMark">Scanned Mark</label>
+                <input id="returnScannedMark" type="text">
+
+                <label for="saleReceiptId">Sale Receipt ID</label>
+                <input id="saleReceiptId" type="text">
+
+                <button type="submit">Return Resolve and Reserve</button>
+            </form>
+        </article>
+    </section>
+
+    <section class="grid-2">
+        <article class="card">
+            <h2>Finalize Reservation</h2>
+            <form id="operationForm">
+                <label for="operationEndpoint">Endpoint</label>
+                <select id="operationEndpoint">
+                    <option value="sold-confirm">sold-confirm</option>
+                    <option value="sale-release">sale-release</option>
+                    <option value="return-confirm">return-confirm</option>
+                    <option value="return-release">return-release</option>
+                </select>
+
+                <label for="operationId">Operation ID</label>
+                <input id="operationId" type="text">
+
+                <label for="reservationId">Reservation ID</label>
+                <input id="reservationId" type="text">
+
+                <label for="operationMarkCode">Mark Code</label>
+                <input id="operationMarkCode" type="text">
+
+                <label for="receiptId">Receipt ID</label>
+                <input id="receiptId" type="text">
+
+                <label for="receiptNumber">Receipt Number (optional)</label>
+                <input id="receiptNumber" type="number" step="1">
+
+                <label for="shiftNumber">Shift Number (optional)</label>
+                <input id="shiftNumber" type="number" step="1">
+
+                <label for="fiscalDocId">Fiscal Doc ID (optional)</label>
+                <input id="fiscalDocId" type="number" step="1">
+
+                <label for="fiscalSign">Fiscal Sign (optional)</label>
+                <input id="fiscalSign" type="number" step="1">
+
+                <label for="operationReason">Reason (optional)</label>
+                <input id="operationReason" type="text">
+
+                <button type="submit">Send Operation</button>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>FIFO Debug</h2>
+            <form id="fifoForm">
+                <label for="fifoProductType">Product Type</label>
+                <input id="fifoProductType" type="text" value="TOBACCO">
+
+                <label for="fifoItem">Item</label>
+                <input id="fifoItem" type="text" value="ITEM-1">
+
+                <label for="fifoGtin">GTIN</label>
+                <input id="fifoGtin" type="text" value="GTIN-1">
+
+                <label for="fifoLimit">Limit</label>
+                <input id="fifoLimit" type="number" min="1" step="1" value="20">
+
+                <button type="submit">Load FIFO Queue</button>
+            </form>
+        </article>
+    </section>
+
+    <section class="grid-2">
+        <article class="card">
+            <h2>History Query</h2>
+            <form id="historyForm">
+                <label for="historyLimit">Limit</label>
+                <input id="historyLimit" type="number" min="1" step="1" value="50">
+
+                <label for="historyMarkCode">Mark Code</label>
+                <input id="historyMarkCode" type="text">
+
+                <label for="historyEventType">Event Type</label>
+                <input id="historyEventType" type="text" placeholder="SALE_RESOLVE">
+
+                <label for="historyShopId">Shop ID</label>
+                <input id="historyShopId" type="text">
+
+                <label for="historyPosId">POS ID</label>
+                <input id="historyPosId" type="text">
+
+                <label for="historyCashierId">Cashier ID</label>
+                <input id="historyCashierId" type="text">
+
+                <label for="historySuccess">Success</label>
+                <select id="historySuccess">
+                    <option value="">any</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="historyFrom">From (ISO)</label>
+                <input id="historyFrom" type="text" placeholder="2026-04-05T00:00:00Z">
+
+                <label for="historyTo">To (ISO)</label>
+                <input id="historyTo" type="text" placeholder="2026-04-05T23:59:59Z">
+
+                <div class="button-row">
+                    <button type="submit">Load History</button>
+                    <button id="btnHistoryCsv" type="button">Download CSV</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>Response Viewer</h2>
+            <pre id="responseOutput" class="output"></pre>
+        </article>
+    </section>
+
+    <section class="card">
+        <h2>Session Notes</h2>
+        <ul id="sessionNotes" class="notes"></ul>
+    </section>
+</main>
+
+<script src="./app.js"></script>
+</body>
+</html>
