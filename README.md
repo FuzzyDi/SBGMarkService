@@ -51,7 +51,7 @@ Default server URL: `http://localhost:8080`
 Server Web UI:
 
 - Open `http://localhost:8080/`
-- UI supports Excel/JSON import, resolve/confirm/release calls, FIFO debug, and reports/history CSV.
+- UI supports Excel/JSON import, resolve/confirm/release calls, FIFO debug, validation check/policy, admin mark management, and reports/history CSV.
 
 ## Run PostgreSQL (docker)
 
@@ -103,17 +103,46 @@ Flyway migration is applied on startup from:
 - `POST /api/v1/km/import/delta`
 - `POST /api/v1/km/import/full/excel` (`multipart/form-data`)
 - `POST /api/v1/km/import/delta/excel` (`multipart/form-data`)
+- `POST /api/v1/validation/check`
+- `GET /api/v1/validation/policy`
+- `PUT /api/v1/validation/policy`
+- `GET /api/v1/admin/marks`
+- `POST /api/v1/admin/marks`
+- `PUT /api/v1/admin/marks/{markCode}`
+- `DELETE /api/v1/admin/marks/{markCode}`
+- `GET /api/v1/admin/audit`
 - `GET /api/v1/reports/summary`
 - `GET /api/v1/reports/history` (supports filters: `eventType`, `shopId`, `posId`, `cashierId`, `success`, `markCode`, `from`, `to`, `limit`)
 - `GET /api/v1/reports/history.csv` (same filters, CSV export)
 - `GET /api/v1/km/debug/marks`
 - `GET /api/v1/km/debug/fifo-by-product?productType=...&item=...&gtin=...&limit=...`
 
+## API role access (optional)
+
+Authentication/authorization can be enabled by env vars:
+
+- `SBG_MARKING_AUTH_ENABLED=true`
+- `SBG_MARKING_AUTH_ADMIN_TOKEN=<admin-secret>`
+- `SBG_MARKING_AUTH_OPERATOR_TOKEN=<operator-secret>`
+
+Headers:
+
+- `X-SBG-Role: ADMIN|OPERATOR`
+- `X-SBG-Token: <role token>`
+- `X-SBG-User: <optional actor id for audit>`
+- `X-Request-Id: <optional request id for audit>`
+
+Role scope:
+
+- `ADMIN`: `/api/v1/admin/**`, `/api/v1/validation/policy`, `/api/v1/km/import/**`
+- `OPERATOR` (or `ADMIN`): `/api/v1/marking/**`, `/api/v1/validation/check`, `/api/v1/reports/**`, `/api/v1/km/debug/**`
+
 ## E2E validation
 
 - Full cashier flow checklist: `docs/e2e-staging-cashier-checklist.md`
 - Postman collection and environment: `docs/postman/`
 - Excel import guide: `docs/km-import-excel.md`
+- Management + validation API guide: `docs/marking-management-api.md`
 
 ## FIFO and lifecycle
 

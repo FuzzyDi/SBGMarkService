@@ -28,6 +28,32 @@
         </div>
     </header>
 
+    <section class="card">
+        <h2>API Auth Headers (Optional)</h2>
+        <div class="grid-4">
+            <div>
+                <label for="authRole">X-SBG-Role</label>
+                <select id="authRole">
+                    <option value="">none</option>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="OPERATOR">OPERATOR</option>
+                </select>
+            </div>
+            <div>
+                <label for="authToken">X-SBG-Token</label>
+                <input id="authToken" type="text" placeholder="token">
+            </div>
+            <div>
+                <label for="authUser">X-SBG-User</label>
+                <input id="authUser" type="text" placeholder="user-login">
+            </div>
+            <div>
+                <label for="authRequestId">X-Request-Id</label>
+                <input id="authRequestId" type="text" placeholder="req-123">
+            </div>
+        </div>
+    </section>
+
     <section class="grid-2">
         <article class="card">
             <h2>Excel Import</h2>
@@ -202,6 +228,194 @@
     </section>
 
     <section class="grid-2">
+        <article class="card">
+            <h2>Validation Check</h2>
+            <form id="validationForm">
+                <label for="validationOperationType">Operation Type</label>
+                <select id="validationOperationType">
+                    <option value="SALE">SALE</option>
+                    <option value="RETURN">RETURN</option>
+                </select>
+
+                <label for="validationScannedMark">Scanned Mark</label>
+                <input id="validationScannedMark" type="text" value="NOT-IN-POOL">
+
+                <label for="validationItem">Item</label>
+                <input id="validationItem" type="text" value="ITEM-1">
+
+                <label for="validationGtin">GTIN</label>
+                <input id="validationGtin" type="text" value="GTIN-1">
+
+                <label for="validationProductType">Product Type</label>
+                <input id="validationProductType" type="text" value="TOBACCO">
+
+                <button type="submit">Check Validation</button>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>Validation Policy</h2>
+            <form id="policyForm">
+                <label for="policyRejectUnknown">Reject Unknown Mark</label>
+                <select id="policyRejectUnknown">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="policyRequireProductMatch">Require Product Match</label>
+                <select id="policyRequireProductMatch">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="policyRejectInvalidFlag">Reject Invalid Flag</label>
+                <select id="policyRejectInvalidFlag">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="policyRejectBlocked">Reject Blocked</label>
+                <select id="policyRejectBlocked">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="policySaleStatuses">Sale Allowed Statuses (comma)</label>
+                <input id="policySaleStatuses" type="text" value="AVAILABLE">
+
+                <label for="policyReturnStatuses">Return Allowed Statuses (comma)</label>
+                <input id="policyReturnStatuses" type="text" value="SOLD">
+
+                <div class="button-row">
+                    <button id="btnLoadPolicy" type="button">Load Policy</button>
+                    <button type="submit">Save Policy</button>
+                </div>
+            </form>
+        </article>
+    </section>
+
+    <section class="grid-2">
+        <article class="card">
+            <h2>Mark Upsert (Admin)</h2>
+            <form id="markUpsertForm">
+                <label for="adminMarkCode">Mark Code</label>
+                <input id="adminMarkCode" type="text">
+
+                <label for="adminProductType">Product Type</label>
+                <input id="adminProductType" type="text" value="TOBACCO">
+
+                <label for="adminItem">Item</label>
+                <input id="adminItem" type="text" value="ITEM-1">
+
+                <label for="adminGtin">GTIN</label>
+                <input id="adminGtin" type="text" value="GTIN-1">
+
+                <label for="adminValid">Valid</label>
+                <select id="adminValid">
+                    <option value="">unchanged</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="adminBlocked">Blocked</label>
+                <select id="adminBlocked">
+                    <option value="">unchanged</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="adminStatus">Status</label>
+                <select id="adminStatus">
+                    <option value="">unchanged</option>
+                    <option value="AVAILABLE">AVAILABLE</option>
+                    <option value="RESERVED">RESERVED</option>
+                    <option value="SOLD">SOLD</option>
+                    <option value="RETURN_RESERVED">RETURN_RESERVED</option>
+                </select>
+
+                <label for="adminFifoTs">FIFO ts epoch ms</label>
+                <input id="adminFifoTs" type="number" step="1">
+
+                <div class="button-row">
+                    <button type="submit">Create/Update</button>
+                    <button id="btnDeleteMark" type="button">Delete Mark</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="card">
+            <h2>Mark List (Admin)</h2>
+            <form id="markListForm">
+                <label for="markListLike">Mark Code Like</label>
+                <input id="markListLike" type="text">
+
+                <label for="markListProductType">Product Type</label>
+                <input id="markListProductType" type="text">
+
+                <label for="markListItem">Item</label>
+                <input id="markListItem" type="text">
+
+                <label for="markListGtin">GTIN</label>
+                <input id="markListGtin" type="text">
+
+                <label for="markListStatus">Status</label>
+                <select id="markListStatus">
+                    <option value="">any</option>
+                    <option value="AVAILABLE">AVAILABLE</option>
+                    <option value="RESERVED">RESERVED</option>
+                    <option value="SOLD">SOLD</option>
+                    <option value="RETURN_RESERVED">RETURN_RESERVED</option>
+                </select>
+
+                <label for="markListValid">Valid</label>
+                <select id="markListValid">
+                    <option value="">any</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="markListBlocked">Blocked</label>
+                <select id="markListBlocked">
+                    <option value="">any</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="markListLimit">Limit</label>
+                <input id="markListLimit" type="number" min="1" step="1" value="50">
+
+                <button type="submit">Load Marks</button>
+            </form>
+        </article>
+    </section>
+
+    <section class="grid-2">
+        <article class="card">
+            <h2>Admin Audit</h2>
+            <form id="auditForm">
+                <label for="auditLimit">Limit</label>
+                <input id="auditLimit" type="number" min="1" step="1" value="100">
+
+                <label for="auditAction">Action</label>
+                <input id="auditAction" type="text" placeholder="ADMIN_MARK_UPSERT">
+
+                <label for="auditSuccess">Success</label>
+                <select id="auditSuccess">
+                    <option value="">any</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+
+                <label for="auditTargetMark">Target Mark</label>
+                <input id="auditTargetMark" type="text">
+
+                <label for="auditActorUser">Actor User</label>
+                <input id="auditActorUser" type="text">
+
+                <button type="submit">Load Audit</button>
+            </form>
+        </article>
+
         <article class="card">
             <h2>History Query</h2>
             <form id="historyForm">

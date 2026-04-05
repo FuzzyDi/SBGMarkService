@@ -15,9 +15,13 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import uz.sbg.marking.contracts.ImportMarkItem;
 import uz.sbg.marking.contracts.ImportRequest;
+import uz.sbg.marking.contracts.MarkAdminUpsertRequest;
 import uz.sbg.marking.contracts.MarkStatus;
 import uz.sbg.marking.contracts.ProductRef;
 import uz.sbg.marking.contracts.ResolveAndReserveRequest;
+import uz.sbg.marking.contracts.ValidationOperationType;
+import uz.sbg.marking.contracts.ValidationPolicy;
+import uz.sbg.marking.contracts.ValidationRequest;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,6 +30,8 @@ import java.util.List;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -263,6 +269,127 @@ class MarkingControllerIntegrationTest {
         mockMvc.perform(multipart("/api/v1/km/import/full/excel")
                         .file(invalidFile))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void adminMarkEndpointsShouldCreateUpdateListDelete() throws Exception {
+        MarkAdminUpsertRequest create = new MarkAdminUpsertRequest();
+        create.setMarkCode("KM-ADM-1");
+        create.setItem("ITEM-ADM");
+        create.setGtin("GTIN-ADM");
+        create.setProductType("TOBACCO");
+        create.setValid(true);
+        create.setBlocked(false);
+        create.setStatus(MarkStatus.AVAILABLE);
+        create.setFifoTsEpochMs(1000L);
+
+        mockMvc.perform(post("/api/v1/admin/marks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(create)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/v1/admin/marks")
+                        .param("markCodeLike", "KM-ADM")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].markCode").value("KM-ADM-1"));
+
+        MarkAdminUpsertRequest update = new MarkAdminUpsertRequest();
+        update.setBlocked(true);
+        mockMvc.perform(put("/api/v1/admin/marks/KM-ADM-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(update)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        MarkAdminUpsertRequest unlock = new MarkAdminUpsertRequest();
+        unlock.setBlocked(false);
+        mockMvc.perform(put("/api/v1/admin/marks/KM-ADM-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(unlock)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(delete("/api/v1/admin/marks/KM-ADM-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void validationEndpointsShouldCheckAndUpdatePolicy() throws Exception {
+        ImportRequest importRequest = new ImportRequest();
+        importRequest.setBatchId("api-batch-val-1");
+        importRequest.setItems(List.of(mark("KM-VAL-1", 1000L)));
+        importRequest.getItems().get(0).setValid(false);
+
+        mockMvc.perform(post("/api/v1/km/import/full")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(importRequest)))
+                .andExpect(status().isOk());
+
+        ValidationRequest validationRequest = new ValidationRequest();
+        validationRequest.setOperationType(ValidationOperationType.SALE);
+        validationRequest.setScannedMark("KM-VAL-1");
+        ProductRef product = new ProductRef();
+        product.setProductType("TOBACCO");
+        product.setItem("ITEM-1");
+        product.setGtin("GTIN-1");
+        validationRequest.setProduct(product);
+
+        mockMvc.perform(post("/api/v1/validation/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validationRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_FLAG"));
+
+        ValidationPolicy policy = new ValidationPolicy();
+        policy.setRejectUnknownMark(true);
+        policy.setRequireProductMatch(true);
+        policy.setRejectBlocked(true);
+        policy.setRejectInvalidFlag(false);
+        policy.setSaleAllowedStatuses(List.of(MarkStatus.AVAILABLE));
+        policy.setReturnAllowedStatuses(List.of(MarkStatus.SOLD));
+
+        mockMvc.perform(put("/api/v1/validation/policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(policy)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rejectInvalidFlag").value(false));
+
+        mockMvc.perform(post("/api/v1/validation/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validationRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("OK"));
+    }
+
+    @Test
+    void adminAuditEndpointShouldReturnAdminEvents() throws Exception {
+        MarkAdminUpsertRequest create = new MarkAdminUpsertRequest();
+        create.setMarkCode("KM-AUD-1");
+        create.setItem("ITEM-AUD");
+        create.setGtin("GTIN-AUD");
+        create.setProductType("TOBACCO");
+        create.setValid(true);
+        create.setBlocked(false);
+        create.setStatus(MarkStatus.AVAILABLE);
+        create.setFifoTsEpochMs(1000L);
+
+        mockMvc.perform(post("/api/v1/admin/marks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(create)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/v1/admin/audit")
+                        .param("action", "ADMIN_MARK_UPSERT")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.events[0].action").value("ADMIN_MARK_UPSERT"));
     }
 
     private ImportMarkItem mark(String code, long fifoTsEpochMs) {

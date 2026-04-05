@@ -8,6 +8,7 @@ import uz.sbg.marking.contracts.FifoByProductResponse;
 import uz.sbg.marking.contracts.HistoryQueryResponse;
 import uz.sbg.marking.contracts.ImportMarkItem;
 import uz.sbg.marking.contracts.ImportRequest;
+import uz.sbg.marking.contracts.MarkAdminUpsertRequest;
 import uz.sbg.marking.contracts.MarkOperationRequest;
 import uz.sbg.marking.contracts.MarkStatus;
 import uz.sbg.marking.contracts.OperationResponse;
@@ -17,6 +18,11 @@ import uz.sbg.marking.contracts.ResolveAndReserveResponse;
 import uz.sbg.marking.contracts.ResolveResult;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveRequest;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveResponse;
+import uz.sbg.marking.contracts.ValidationOperationType;
+import uz.sbg.marking.contracts.ValidationPolicy;
+import uz.sbg.marking.contracts.ValidationRequest;
+import uz.sbg.marking.contracts.ValidationResponse;
+import uz.sbg.marking.contracts.ValidationResultCode;
 import uz.sbg.marking.server.model.MarkRecord;
 import uz.sbg.marking.server.persistence.entity.IdempotencyEntryEntity;
 import uz.sbg.marking.server.persistence.repository.IdempotencyEntryRepository;
@@ -125,6 +131,96 @@ class MarkingServiceIntegrationTest {
         assertThat(queue.getCandidates().get(2).getMarkCode()).isEqualTo("KM-Q-3");
         assertThat(queue.getCandidates().get(2).isSelectable()).isFalse();
         assertThat(queue.getCandidates().get(2).getReason()).isEqualTo("STATUS_SOLD");
+    }
+
+    @Test
+    void shouldValidateMarkByPolicy() {
+        importMarks(List.of(
+                mark("KM-V-1", "ITEM-V", "GTIN-V", "TOBACCO", true, false, MarkStatus.AVAILABLE, 1000L),
+                mark("KM-V-2", "ITEM-V", "GTIN-V", "TOBACCO", false, false, MarkStatus.AVAILABLE, 2000L)
+        ));
+
+        ValidationRequest okRequest = new ValidationRequest();
+        okRequest.setOperationType(ValidationOperationType.SALE);
+        okRequest.setScannedMark("KM-V-1");
+        ProductRef product = new ProductRef();
+        product.setProductType("TOBACCO");
+        product.setItem("ITEM-V");
+        product.setGtin("GTIN-V");
+        okRequest.setProduct(product);
+
+        ValidationResponse ok = markingService.validateMark(okRequest);
+        assertThat(ok.isSuccess()).isTrue();
+        assertThat(ok.getCode()).isEqualTo(ValidationResultCode.OK);
+
+        ValidationRequest invalidFlagRequest = new ValidationRequest();
+        invalidFlagRequest.setOperationType(ValidationOperationType.SALE);
+        invalidFlagRequest.setScannedMark("KM-V-2");
+        invalidFlagRequest.setProduct(product);
+
+        ValidationResponse invalid = markingService.validateMark(invalidFlagRequest);
+        assertThat(invalid.isSuccess()).isFalse();
+        assertThat(invalid.getCode()).isEqualTo(ValidationResultCode.INVALID_FLAG);
+    }
+
+    @Test
+    void shouldUpdateValidationPolicyAndApplyRules() {
+        importMarks(List.of(
+                mark("KM-P-1", "ITEM-P", "GTIN-P", "TOBACCO", false, false, MarkStatus.AVAILABLE, 1000L)
+        ));
+
+        ValidationPolicy policy = markingService.getValidationPolicy();
+        policy.setRejectInvalidFlag(false);
+        policy.setRejectUnknownMark(false);
+        policy.setSaleAllowedStatuses(List.of(MarkStatus.AVAILABLE, MarkStatus.SOLD));
+        markingService.updateValidationPolicy(policy);
+
+        ValidationRequest request = new ValidationRequest();
+        request.setOperationType(ValidationOperationType.SALE);
+        request.setScannedMark("KM-P-1");
+        ProductRef product = new ProductRef();
+        product.setProductType("TOBACCO");
+        product.setItem("ITEM-P");
+        product.setGtin("GTIN-P");
+        request.setProduct(product);
+
+        ValidationResponse response = markingService.validateMark(request);
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(response.getCode()).isEqualTo(ValidationResultCode.OK);
+    }
+
+    @Test
+    void shouldUpsertAndDeleteMarkViaAdminMethods() {
+        MarkAdminUpsertRequest create = new MarkAdminUpsertRequest();
+        create.setMarkCode("KM-A-1");
+        create.setProductType("TOBACCO");
+        create.setItem("ITEM-A");
+        create.setGtin("GTIN-A");
+        create.setValid(true);
+        create.setBlocked(false);
+        create.setStatus(MarkStatus.AVAILABLE);
+        create.setFifoTsEpochMs(1000L);
+
+        OperationResponse created = markingService.adminUpsertMark(create, null);
+        assertThat(created.isSuccess()).isTrue();
+
+        MarkAdminUpsertRequest update = new MarkAdminUpsertRequest();
+        update.setBlocked(true);
+        OperationResponse updated = markingService.adminUpsertMark(update, "KM-A-1");
+        assertThat(updated.isSuccess()).isTrue();
+
+        List<MarkRecord> filtered = markingService.adminQueryMarks("TOBACCO", "ITEM-A", "GTIN-A", null, null, true, 10, "KM-A");
+        assertThat(filtered).hasSize(1);
+        assertThat(filtered.get(0).isBlocked()).isTrue();
+
+        MarkAdminUpsertRequest unlock = new MarkAdminUpsertRequest();
+        unlock.setBlocked(false);
+        OperationResponse unlocked = markingService.adminUpsertMark(unlock, "KM-A-1");
+        assertThat(unlocked.isSuccess()).isTrue();
+
+        OperationResponse deleted = markingService.adminDeleteMark("KM-A-1");
+        assertThat(deleted.isSuccess()).isTrue();
+        assertThat(markingService.snapshotMarks().stream().noneMatch(m -> "KM-A-1".equals(m.getMarkCode()))).isTrue();
     }
 
     @Test

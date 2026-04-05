@@ -27,6 +27,10 @@ sbg:
     idempotency:
       retention:
         days: 30
+    auth:
+      enabled: ${SBG_MARKING_AUTH_ENABLED:false}
+      admin-token: ${SBG_MARKING_AUTH_ADMIN_TOKEN:}
+      operator-token: ${SBG_MARKING_AUTH_OPERATOR_TOKEN:}
 
 management:
   endpoints:

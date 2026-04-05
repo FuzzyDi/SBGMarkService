@@ -14,6 +14,7 @@ import uz.sbg.marking.contracts.ImportMarkItem;
 import uz.sbg.marking.contracts.ImportRequest;
 import uz.sbg.marking.contracts.ImportResponse;
 import uz.sbg.marking.contracts.MarkOperationRequest;
+import uz.sbg.marking.contracts.MarkAdminUpsertRequest;
 import uz.sbg.marking.contracts.MarkingHistoryEvent;
 import uz.sbg.marking.contracts.MarkSource;
 import uz.sbg.marking.contracts.MarkStatus;
@@ -25,6 +26,11 @@ import uz.sbg.marking.contracts.ResolveAndReserveResponse;
 import uz.sbg.marking.contracts.ResolveResult;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveRequest;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveResponse;
+import uz.sbg.marking.contracts.ValidationOperationType;
+import uz.sbg.marking.contracts.ValidationPolicy;
+import uz.sbg.marking.contracts.ValidationRequest;
+import uz.sbg.marking.contracts.ValidationResponse;
+import uz.sbg.marking.contracts.ValidationResultCode;
 import uz.sbg.marking.server.model.MarkRecord;
 import uz.sbg.marking.server.model.ReservationRecord;
 import uz.sbg.marking.server.model.ReservationType;
@@ -32,16 +38,19 @@ import uz.sbg.marking.server.persistence.entity.HistoryEventEntity;
 import uz.sbg.marking.server.persistence.entity.IdempotencyEntryEntity;
 import uz.sbg.marking.server.persistence.entity.MarkEntity;
 import uz.sbg.marking.server.persistence.entity.ReservationEntity;
+import uz.sbg.marking.server.persistence.entity.ValidationPolicyEntity;
 import uz.sbg.marking.server.persistence.repository.HistoryEventRepository;
 import uz.sbg.marking.server.persistence.repository.IdempotencyEntryRepository;
 import uz.sbg.marking.server.persistence.repository.MarkRepository;
 import uz.sbg.marking.server.persistence.repository.ReservationRepository;
+import uz.sbg.marking.server.persistence.repository.ValidationPolicyRepository;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,12 +76,14 @@ public class MarkingService {
     private final ReservationRepository reservationRepository;
     private final HistoryEventRepository historyEventRepository;
     private final IdempotencyEntryRepository idempotencyEntryRepository;
+    private final ValidationPolicyRepository validationPolicyRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final Duration reservationTtl;
     private final Duration idempotencyRetention;
     private final int historyMaxSize;
     private final Object monitor = new Object();
+    private ValidationPolicy validationPolicy = defaultValidationPolicy();
 
     public MarkingService(@Value("${sbg.marking.reservation.ttl.seconds:900}") long reservationTtlSec,
                           @Value("${sbg.marking.idempotency.retention.days:30}") long idempotencyRetentionDays,
@@ -81,11 +92,13 @@ public class MarkingService {
                           ReservationRepository reservationRepository,
                           HistoryEventRepository historyEventRepository,
                           IdempotencyEntryRepository idempotencyEntryRepository,
+                          ValidationPolicyRepository validationPolicyRepository,
                           ObjectMapper objectMapper) {
         this.markRepository = markRepository;
         this.reservationRepository = reservationRepository;
         this.historyEventRepository = historyEventRepository;
         this.idempotencyEntryRepository = idempotencyEntryRepository;
+        this.validationPolicyRepository = validationPolicyRepository;
         this.objectMapper = objectMapper;
         this.clock = Clock.systemUTC();
         this.reservationTtl = Duration.ofSeconds(Math.max(60, reservationTtlSec));
@@ -116,6 +129,8 @@ public class MarkingService {
 
             int fromIndex = Math.max(0, loadedHistory.size() - historyMaxSize);
             history.addAll(loadedHistory.subList(fromIndex, loadedHistory.size()));
+
+            validationPolicy = loadValidationPolicyFromDb();
 
             cleanupExpiredReservations();
             cleanupExpiredIdempotencyEntries();
@@ -466,6 +481,177 @@ public class MarkingService {
     public List<MarkRecord> snapshotMarks() {
         synchronized (monitor) {
             return new ArrayList<>(marks.values());
+        }
+    }
+
+    public List<MarkRecord> adminQueryMarks(String productType,
+                                            String item,
+                                            String gtin,
+                                            MarkStatus status,
+                                            Boolean valid,
+                                            Boolean blocked,
+                                            Integer limit,
+                                            String markCodeLike) {
+        synchronized (monitor) {
+            int maxItems = limit == null ? 500 : Math.max(1, Math.min(5000, limit));
+            String normalizedLike = isBlank(markCodeLike) ? null : markCodeLike.toLowerCase();
+
+            return marks.values().stream()
+                    .filter(mark -> isBlank(productType) || equalsIgnoreCase(mark.getProductType(), productType))
+                    .filter(mark -> isBlank(item) || Objects.equals(mark.getItem(), item))
+                    .filter(mark -> isBlank(gtin) || Objects.equals(mark.getGtin(), gtin))
+                    .filter(mark -> status == null || status == mark.getStatus())
+                    .filter(mark -> valid == null || valid.booleanValue() == mark.isValid())
+                    .filter(mark -> blocked == null || blocked.booleanValue() == mark.isBlocked())
+                    .filter(mark -> normalizedLike == null || (mark.getMarkCode() != null && mark.getMarkCode().toLowerCase().contains(normalizedLike)))
+                    .sorted(FIFO_COMPARATOR)
+                    .limit(maxItems)
+                    .collect(Collectors.toList());
+        }
+    }
+
+    public OperationResponse adminUpsertMark(MarkAdminUpsertRequest request, String markCodeOverride) {
+        synchronized (monitor) {
+            String markCode = firstNonBlank(markCodeOverride, request == null ? null : request.getMarkCode());
+            if (isBlank(markCode)) {
+                return OperationResponse.fail(ErrorCode.VALIDATION_FAILED, "markCode is required.");
+            }
+
+            MarkRecord existing = marks.get(markCode);
+            boolean created = existing == null;
+            MarkRecord mark = existing == null ? new MarkRecord() : existing;
+            mark.setMarkCode(markCode);
+
+            String productType = firstNonBlank(request == null ? null : request.getProductType(), mark.getProductType());
+            if (isBlank(productType)) {
+                return OperationResponse.fail(ErrorCode.VALIDATION_FAILED, "productType is required.");
+            }
+            mark.setProductType(productType);
+
+            String newItem = firstNonBlank(request == null ? null : request.getItem(), mark.getItem());
+            String newGtin = firstNonBlank(request == null ? null : request.getGtin(), mark.getGtin());
+            if (isBlank(newItem) && isBlank(newGtin)) {
+                return OperationResponse.fail(ErrorCode.VALIDATION_FAILED, "one of item/gtin is required.");
+            }
+            mark.setItem(newItem);
+            mark.setGtin(newGtin);
+
+            if (request != null && request.getValid() != null) {
+                mark.setValid(request.getValid());
+            } else if (created) {
+                mark.setValid(true);
+            }
+
+            if (request != null && request.getBlocked() != null) {
+                mark.setBlocked(request.getBlocked());
+            } else if (created) {
+                mark.setBlocked(false);
+            }
+
+            MarkStatus requestedStatus = request == null ? null : request.getStatus();
+            if (requestedStatus != null) {
+                if (!isBlank(mark.getActiveReservationId()) && requestedStatus != mark.getStatus()) {
+                    return OperationResponse.fail(ErrorCode.INVALID_STATE, "Cannot change status while reservation is active.");
+                }
+                mark.setStatus(requestedStatus);
+            } else if (mark.getStatus() == null) {
+                mark.setStatus(MarkStatus.AVAILABLE);
+            }
+
+            if (request != null && request.getFifoTsEpochMs() != null) {
+                mark.setFifoTs(Instant.ofEpochMilli(request.getFifoTsEpochMs()));
+            } else if (mark.getFifoTs() == null) {
+                mark.setFifoTs(Instant.now(clock));
+            }
+
+            saveMark(mark);
+            recordSimpleEvent("ADMIN_MARK_UPSERT", true, ErrorCode.NONE, (created ? "Created mark " : "Updated mark ") + markCode);
+            return OperationResponse.ok(created ? "Mark created." : "Mark updated.");
+        }
+    }
+
+    public OperationResponse adminDeleteMark(String markCode) {
+        synchronized (monitor) {
+            if (isBlank(markCode)) {
+                return OperationResponse.fail(ErrorCode.VALIDATION_FAILED, "markCode is required.");
+            }
+
+            MarkRecord mark = marks.get(markCode);
+            if (mark == null) {
+                return OperationResponse.ok("Mark is already absent.");
+            }
+
+            if (!isBlank(mark.getActiveReservationId())) {
+                return OperationResponse.fail(ErrorCode.INVALID_STATE, "Cannot delete mark with active reservation.");
+            }
+            if (mark.getStatus() != MarkStatus.AVAILABLE) {
+                return OperationResponse.fail(ErrorCode.INVALID_STATE, "Only AVAILABLE marks can be deleted.");
+            }
+
+            deleteMark(markCode);
+            recordSimpleEvent("ADMIN_MARK_DELETE", true, ErrorCode.NONE, "Deleted mark " + markCode);
+            return OperationResponse.ok("Mark deleted.");
+        }
+    }
+
+    public ValidationPolicy getValidationPolicy() {
+        synchronized (monitor) {
+            return cloneValidationPolicy(validationPolicy);
+        }
+    }
+
+    public ValidationPolicy updateValidationPolicy(ValidationPolicy request) {
+        synchronized (monitor) {
+            ValidationPolicy sanitized = sanitizeValidationPolicy(request);
+            validationPolicy = sanitized;
+            saveValidationPolicyToDb(sanitized);
+            recordSimpleEvent("VALIDATION_POLICY_UPDATE", true, ErrorCode.NONE, "Validation policy updated.");
+            return cloneValidationPolicy(validationPolicy);
+        }
+    }
+
+    public ValidationResponse validateMark(ValidationRequest request) {
+        synchronized (monitor) {
+            if (request == null || request.getOperationType() == null) {
+                return validationFail(ValidationResultCode.VALIDATION_FAILED, "operationType is required.");
+            }
+            if (request.getProduct() == null || isBlank(request.getProduct().getProductType())
+                    || (isBlank(request.getProduct().getItem()) && isBlank(request.getProduct().getGtin()))) {
+                return validationFail(ValidationResultCode.VALIDATION_FAILED, "productType and one of item/gtin are required.");
+            }
+            if (isBlank(request.getScannedMark())) {
+                return validationFail(ValidationResultCode.VALIDATION_FAILED, "scannedMark is required.");
+            }
+
+            MarkRecord mark = marks.get(request.getScannedMark());
+            if (mark == null) {
+                if (validationPolicy.isRejectUnknownMark()) {
+                    return validationFail(ValidationResultCode.NOT_FOUND, "Mark was not found.");
+                }
+                ValidationResponse response = validationOk("Mark is unknown but allowed by policy.", null);
+                return response;
+            }
+
+            if (validationPolicy.isRequireProductMatch() && !matchesProduct(mark, request.getProduct())) {
+                return validationReject(mark, ValidationResultCode.PRODUCT_MISMATCH, "Mark does not match product.");
+            }
+
+            if (validationPolicy.isRejectInvalidFlag() && !mark.isValid()) {
+                return validationReject(mark, ValidationResultCode.INVALID_FLAG, "Mark is not valid.");
+            }
+
+            if (validationPolicy.isRejectBlocked() && mark.isBlocked()) {
+                return validationReject(mark, ValidationResultCode.BLOCKED, "Mark is blocked.");
+            }
+
+            EnumSet<MarkStatus> allowed = request.getOperationType() == ValidationOperationType.RETURN
+                    ? toStatusSet(validationPolicy.getReturnAllowedStatuses(), MarkStatus.SOLD)
+                    : toStatusSet(validationPolicy.getSaleAllowedStatuses(), MarkStatus.AVAILABLE);
+            if (!allowed.contains(mark.getStatus())) {
+                return validationReject(mark, ValidationResultCode.STATUS_NOT_ALLOWED, "Mark status is not allowed by policy.");
+            }
+
+            return validationOk("Validation passed.", mark);
         }
     }
 
@@ -904,6 +1090,150 @@ public class MarkingService {
             return "STATUS_" + mark.getStatus();
         }
         return "OK";
+    }
+
+    private ValidationResponse validationOk(String message, MarkRecord mark) {
+        ValidationResponse response = new ValidationResponse();
+        response.setSuccess(true);
+        response.setCode(ValidationResultCode.OK);
+        response.setMessage(message);
+        fillValidationResponseMark(response, mark);
+        return response;
+    }
+
+    private ValidationResponse validationReject(MarkRecord mark, ValidationResultCode code, String message) {
+        ValidationResponse response = new ValidationResponse();
+        response.setSuccess(false);
+        response.setCode(code);
+        response.setMessage(message);
+        fillValidationResponseMark(response, mark);
+        return response;
+    }
+
+    private ValidationResponse validationFail(ValidationResultCode code, String message) {
+        ValidationResponse response = new ValidationResponse();
+        response.setSuccess(false);
+        response.setCode(code);
+        response.setMessage(message);
+        return response;
+    }
+
+    private void fillValidationResponseMark(ValidationResponse response, MarkRecord mark) {
+        if (response == null || mark == null) {
+            return;
+        }
+        response.setMarkCode(mark.getMarkCode());
+        response.setMarkStatus(mark.getStatus());
+        response.setValid(mark.isValid());
+        response.setBlocked(mark.isBlocked());
+    }
+
+    private ValidationPolicy defaultValidationPolicy() {
+        ValidationPolicy policy = new ValidationPolicy();
+        policy.setRejectUnknownMark(true);
+        policy.setRequireProductMatch(true);
+        policy.setRejectInvalidFlag(true);
+        policy.setRejectBlocked(true);
+        policy.setSaleAllowedStatuses(new ArrayList<>(List.of(MarkStatus.AVAILABLE)));
+        policy.setReturnAllowedStatuses(new ArrayList<>(List.of(MarkStatus.SOLD)));
+        return policy;
+    }
+
+    private ValidationPolicy cloneValidationPolicy(ValidationPolicy source) {
+        ValidationPolicy policy = new ValidationPolicy();
+        if (source == null) {
+            return defaultValidationPolicy();
+        }
+        policy.setRejectUnknownMark(source.isRejectUnknownMark());
+        policy.setRequireProductMatch(source.isRequireProductMatch());
+        policy.setRejectInvalidFlag(source.isRejectInvalidFlag());
+        policy.setRejectBlocked(source.isRejectBlocked());
+        policy.setSaleAllowedStatuses(new ArrayList<>(source.getSaleAllowedStatuses() == null
+                ? List.of(MarkStatus.AVAILABLE)
+                : source.getSaleAllowedStatuses()));
+        policy.setReturnAllowedStatuses(new ArrayList<>(source.getReturnAllowedStatuses() == null
+                ? List.of(MarkStatus.SOLD)
+                : source.getReturnAllowedStatuses()));
+        return policy;
+    }
+
+    private ValidationPolicy sanitizeValidationPolicy(ValidationPolicy source) {
+        ValidationPolicy policy = cloneValidationPolicy(source);
+        EnumSet<MarkStatus> saleStatuses = toStatusSet(policy.getSaleAllowedStatuses(), MarkStatus.AVAILABLE);
+        EnumSet<MarkStatus> returnStatuses = toStatusSet(policy.getReturnAllowedStatuses(), MarkStatus.SOLD);
+        policy.setSaleAllowedStatuses(new ArrayList<>(saleStatuses));
+        policy.setReturnAllowedStatuses(new ArrayList<>(returnStatuses));
+        return policy;
+    }
+
+    private EnumSet<MarkStatus> toStatusSet(List<MarkStatus> statuses, MarkStatus fallback) {
+        EnumSet<MarkStatus> set = EnumSet.noneOf(MarkStatus.class);
+        if (statuses != null) {
+            for (MarkStatus status : statuses) {
+                if (status != null) {
+                    set.add(status);
+                }
+            }
+        }
+        if (set.isEmpty()) {
+            set.add(fallback);
+        }
+        return set;
+    }
+
+    private ValidationPolicy loadValidationPolicyFromDb() {
+        ValidationPolicyEntity entity = validationPolicyRepository.findById(1).orElse(null);
+        if (entity == null) {
+            ValidationPolicy fallback = defaultValidationPolicy();
+            saveValidationPolicyToDb(fallback);
+            return fallback;
+        }
+        ValidationPolicy policy = new ValidationPolicy();
+        policy.setRejectUnknownMark(entity.isRejectUnknownMark());
+        policy.setRequireProductMatch(entity.isRequireProductMatch());
+        policy.setRejectInvalidFlag(entity.isRejectInvalidFlag());
+        policy.setRejectBlocked(entity.isRejectBlocked());
+        policy.setSaleAllowedStatuses(parseStatuses(entity.getSaleAllowedStatuses(), MarkStatus.AVAILABLE));
+        policy.setReturnAllowedStatuses(parseStatuses(entity.getReturnAllowedStatuses(), MarkStatus.SOLD));
+        return sanitizeValidationPolicy(policy);
+    }
+
+    private void saveValidationPolicyToDb(ValidationPolicy policy) {
+        ValidationPolicy sanitized = sanitizeValidationPolicy(policy);
+        ValidationPolicyEntity entity = validationPolicyRepository.findById(1).orElseGet(ValidationPolicyEntity::new);
+        entity.setId(1);
+        entity.setRejectUnknownMark(sanitized.isRejectUnknownMark());
+        entity.setRequireProductMatch(sanitized.isRequireProductMatch());
+        entity.setRejectInvalidFlag(sanitized.isRejectInvalidFlag());
+        entity.setRejectBlocked(sanitized.isRejectBlocked());
+        entity.setSaleAllowedStatuses(serializeStatuses(sanitized.getSaleAllowedStatuses(), MarkStatus.AVAILABLE));
+        entity.setReturnAllowedStatuses(serializeStatuses(sanitized.getReturnAllowedStatuses(), MarkStatus.SOLD));
+        validationPolicyRepository.save(entity);
+    }
+
+    private List<MarkStatus> parseStatuses(String raw, MarkStatus fallback) {
+        List<MarkStatus> result = new ArrayList<>();
+        if (!isBlank(raw)) {
+            for (String token : raw.split(",")) {
+                if (isBlank(token)) {
+                    continue;
+                }
+                try {
+                    result.add(MarkStatus.valueOf(token.trim()));
+                } catch (IllegalArgumentException ignored) {
+                    // Ignore unknown status names from malformed DB values.
+                }
+            }
+        }
+        if (result.isEmpty()) {
+            result.add(fallback);
+        }
+        return result;
+    }
+
+    private String serializeStatuses(List<MarkStatus> statuses, MarkStatus fallback) {
+        EnumSet<MarkStatus> set = toStatusSet(statuses, fallback);
+        return set.stream().map(Enum::name).collect(Collectors.joining(","));
     }
 
     private void recordResolveEvent(String eventType, ResolveAndReserveRequest request, ResolveAndReserveResponse response) {

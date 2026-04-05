@@ -39,8 +39,15 @@
         returnResolveForm: byId("returnResolveForm"),
         operationForm: byId("operationForm"),
         fifoForm: byId("fifoForm"),
+        validationForm: byId("validationForm"),
+        policyForm: byId("policyForm"),
+        btnLoadPolicy: byId("btnLoadPolicy"),
+        markUpsertForm: byId("markUpsertForm"),
+        markListForm: byId("markListForm"),
+        btnDeleteMark: byId("btnDeleteMark"),
         historyForm: byId("historyForm"),
-        btnHistoryCsv: byId("btnHistoryCsv")
+        btnHistoryCsv: byId("btnHistoryCsv"),
+        auditForm: byId("auditForm")
     };
 
     const session = {
@@ -58,6 +65,9 @@
         seedOperationIds();
         bindEvents();
         pingHealth();
+        loadValidationPolicy().catch(function () {
+            // Policy endpoint may be temporarily unavailable.
+        });
     }
 
     function bindEvents() {
@@ -70,8 +80,15 @@
         els.returnResolveForm.addEventListener("submit", onReturnResolve);
         els.operationForm.addEventListener("submit", onOperation);
         els.fifoForm.addEventListener("submit", onFifo);
+        els.validationForm.addEventListener("submit", onValidationCheck);
+        els.policyForm.addEventListener("submit", onSavePolicy);
+        els.btnLoadPolicy.addEventListener("click", onLoadPolicy);
+        els.markUpsertForm.addEventListener("submit", onMarkUpsert);
+        els.markListForm.addEventListener("submit", onLoadMarks);
+        els.btnDeleteMark.addEventListener("click", onDeleteMark);
         els.historyForm.addEventListener("submit", onHistory);
         els.btnHistoryCsv.addEventListener("click", onDownloadHistoryCsv);
+        els.auditForm.addEventListener("submit", onLoadAudit);
     }
 
     function byId(id) {
@@ -85,7 +102,11 @@
 
     async function apiCall(path, options) {
         const url = safeBaseUrl() + path;
-        const response = await fetch(url, options || {});
+        const requestOptions = options || {};
+        const mergedHeaders = Object.assign({}, authHeaders(), requestOptions.headers || {});
+        requestOptions.headers = mergedHeaders;
+
+        const response = await fetch(url, requestOptions);
         const contentType = response.headers.get("content-type") || "";
 
         let body;
@@ -154,6 +175,20 @@
         return asInt(value);
     }
 
+    function parseBooleanNullable(value) {
+        const normalized = nonEmpty(value);
+        if (normalized === null) {
+            return null;
+        }
+        if (normalized === "true") {
+            return true;
+        }
+        if (normalized === "false") {
+            return false;
+        }
+        return null;
+    }
+
     function nonEmpty(value) {
         const trimmed = (value || "").trim();
         return trimmed ? trimmed : null;
@@ -174,6 +209,28 @@
 
     function operationId(prefix) {
         return prefix + "-" + Date.now();
+    }
+
+    function authHeaders() {
+        const role = nonEmpty(byId("authRole").value);
+        const token = nonEmpty(byId("authToken").value);
+        const user = nonEmpty(byId("authUser").value);
+        const requestId = nonEmpty(byId("authRequestId").value);
+        const headers = {};
+
+        if (role) {
+            headers["X-SBG-Role"] = role;
+        }
+        if (token) {
+            headers["X-SBG-Token"] = token;
+        }
+        if (user) {
+            headers["X-SBG-User"] = user;
+        }
+        if (requestId) {
+            headers["X-Request-Id"] = requestId;
+        }
+        return headers;
     }
 
     function seedOperationIds() {
@@ -269,6 +326,8 @@
             session.lastSaleMarkCode = result.appliedMark;
             byId("operationMarkCode").value = result.appliedMark;
             byId("returnScannedMark").value = result.appliedMark;
+            byId("validationScannedMark").value = result.appliedMark;
+            byId("adminMarkCode").value = result.appliedMark;
         }
         byId("saleOperationId").value = operationId("sale-resolve");
     }
@@ -302,6 +361,7 @@
         if (result && result.appliedMark) {
             session.lastReturnMarkCode = result.appliedMark;
             byId("operationMarkCode").value = result.appliedMark;
+            byId("validationScannedMark").value = result.appliedMark;
         }
         byId("returnOperationId").value = operationId("return-resolve");
     }
@@ -341,6 +401,114 @@
         await apiCall("/api/v1/km/debug/fifo-by-product" + query);
     }
 
+    async function onValidationCheck(event) {
+        event.preventDefault();
+        const payload = {
+            operationType: nonEmpty(byId("validationOperationType").value) || "SALE",
+            scannedMark: nonEmpty(byId("validationScannedMark").value),
+            product: {
+                item: nonEmpty(byId("validationItem").value),
+                gtin: nonEmpty(byId("validationGtin").value),
+                productType: nonEmpty(byId("validationProductType").value)
+            }
+        };
+        await apiCall("/api/v1/validation/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+    }
+
+    async function onLoadPolicy() {
+        await loadValidationPolicy();
+    }
+
+    async function loadValidationPolicy() {
+        const policy = await apiCall("/api/v1/validation/policy");
+        if (!policy) {
+            return;
+        }
+        byId("policyRejectUnknown").value = String(Boolean(policy.rejectUnknownMark));
+        byId("policyRequireProductMatch").value = String(Boolean(policy.requireProductMatch));
+        byId("policyRejectInvalidFlag").value = String(Boolean(policy.rejectInvalidFlag));
+        byId("policyRejectBlocked").value = String(Boolean(policy.rejectBlocked));
+        byId("policySaleStatuses").value = Array.isArray(policy.saleAllowedStatuses) ? policy.saleAllowedStatuses.join(",") : "AVAILABLE";
+        byId("policyReturnStatuses").value = Array.isArray(policy.returnAllowedStatuses) ? policy.returnAllowedStatuses.join(",") : "SOLD";
+    }
+
+    async function onSavePolicy(event) {
+        event.preventDefault();
+        const payload = {
+            rejectUnknownMark: parseBooleanNullable(byId("policyRejectUnknown").value) !== false,
+            requireProductMatch: parseBooleanNullable(byId("policyRequireProductMatch").value) !== false,
+            rejectInvalidFlag: parseBooleanNullable(byId("policyRejectInvalidFlag").value) !== false,
+            rejectBlocked: parseBooleanNullable(byId("policyRejectBlocked").value) !== false,
+            saleAllowedStatuses: parseStatusList(byId("policySaleStatuses").value, ["AVAILABLE"]),
+            returnAllowedStatuses: parseStatusList(byId("policyReturnStatuses").value, ["SOLD"])
+        };
+
+        await apiCall("/api/v1/validation/policy", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+    }
+
+    function parseStatusList(raw, fallback) {
+        const trimmed = nonEmpty(raw);
+        if (!trimmed) {
+            return fallback;
+        }
+        const tokens = trimmed.split(",").map(function (t) { return t.trim().toUpperCase(); }).filter(Boolean);
+        return tokens.length > 0 ? tokens : fallback;
+    }
+
+    async function onMarkUpsert(event) {
+        event.preventDefault();
+        const payload = {
+            markCode: nonEmpty(byId("adminMarkCode").value),
+            productType: nonEmpty(byId("adminProductType").value),
+            item: nonEmpty(byId("adminItem").value),
+            gtin: nonEmpty(byId("adminGtin").value),
+            valid: parseBooleanNullable(byId("adminValid").value),
+            blocked: parseBooleanNullable(byId("adminBlocked").value),
+            status: nonEmpty(byId("adminStatus").value),
+            fifoTsEpochMs: asLong(byId("adminFifoTs").value)
+        };
+
+        await apiCall("/api/v1/admin/marks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+    }
+
+    async function onDeleteMark() {
+        const markCode = nonEmpty(byId("adminMarkCode").value);
+        if (!markCode) {
+            renderOutput({ error: "admin mark code is required for delete." });
+            return;
+        }
+        await apiCall("/api/v1/admin/marks/" + encodeURIComponent(markCode), {
+            method: "DELETE"
+        });
+    }
+
+    async function onLoadMarks(event) {
+        event.preventDefault();
+        const query = serializeQuery({
+            markCodeLike: nonEmpty(byId("markListLike").value),
+            productType: nonEmpty(byId("markListProductType").value),
+            item: nonEmpty(byId("markListItem").value),
+            gtin: nonEmpty(byId("markListGtin").value),
+            status: nonEmpty(byId("markListStatus").value),
+            valid: nonEmpty(byId("markListValid").value),
+            blocked: nonEmpty(byId("markListBlocked").value),
+            limit: asInt(byId("markListLimit").value)
+        });
+        await apiCall("/api/v1/admin/marks" + query);
+    }
+
     async function onHistory(event) {
         event.preventDefault();
         const query = buildHistoryQuery();
@@ -366,5 +534,17 @@
             from: nonEmpty(byId("historyFrom").value),
             to: nonEmpty(byId("historyTo").value)
         });
+    }
+
+    async function onLoadAudit(event) {
+        event.preventDefault();
+        const query = serializeQuery({
+            limit: asInt(byId("auditLimit").value),
+            action: nonEmpty(byId("auditAction").value),
+            success: nonEmpty(byId("auditSuccess").value),
+            targetMarkCode: nonEmpty(byId("auditTargetMark").value),
+            actorUser: nonEmpty(byId("auditActorUser").value)
+        });
+        await apiCall("/api/v1/admin/audit" + query);
     }
 })();
