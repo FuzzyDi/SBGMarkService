@@ -36,6 +36,7 @@ CI (GitHub Actions):
 - `.github/workflows/plugin-build.yml`
 - Builds `sbg-set10-marking-plugin` (manual or PR path-trigger), requires GitHub secret `SET10_API_JAR_BASE64`
 - If secret is missing, workflow is skipped with a notice (no failure)
+- Secret setup guide: `docs/github-set10-secret.md`
 
 ## Run server
 
@@ -52,6 +53,14 @@ Default server URL: `http://localhost:8080`
 cd E:\Projects\SbgPosAgent\marking-auto-km
 Copy-Item .env.example .env
 docker compose up -d
+```
+
+## Run Staging Stack (server + postgres in Docker)
+
+```powershell
+cd E:\Projects\SbgPosAgent\marking-auto-km
+Copy-Item .env.staging.example .env
+docker compose -f docker-compose.staging.yml up -d --build
 ```
 
 Default DB connection (can be overridden by env vars):

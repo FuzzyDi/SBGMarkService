@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  sbg-marking-postgres:
+    image: postgres:16-alpine
+    container_name: sbg-marking-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SBG_MARKING_DB_NAME:-sbg_marking}
+      POSTGRES_USER: ${SBG_MARKING_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${SBG_MARKING_DB_PASSWORD:-postgres}
+    ports:
+      - "${SBG_MARKING_DB_PORT:-5432}:5432"
+    volumes:
+      - sbg-marking-postgres-staging-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SBG_MARKING_DB_USER:-postgres} -d ${SBG_MARKING_DB_NAME:-sbg_marking}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  sbg-marking-server:
+    build:
+      context: .
+      dockerfile: sbg-marking-server/Dockerfile
+    container_name: sbg-marking-server-staging
+    restart: unless-stopped
+    depends_on:
+      sbg-marking-postgres:
+        condition: service_healthy
+    environment:
+      SBG_MARKING_DB_URL: jdbc:postgresql://sbg-marking-postgres:5432/${SBG_MARKING_DB_NAME:-sbg_marking}
+      SBG_MARKING_DB_USER: ${SBG_MARKING_DB_USER:-postgres}
+      SBG_MARKING_DB_PASSWORD: ${SBG_MARKING_DB_PASSWORD:-postgres}
+    ports:
+      - "${SBG_MARKING_SERVER_PORT:-8080}:8080"
+
+volumes:
+  sbg-marking-postgres-staging-data:
