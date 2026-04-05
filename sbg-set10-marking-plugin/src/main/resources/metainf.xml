@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SetIntegration set10-api-version="1.23.0"
+                version="1.0.0"
+                xmlns="http://crystals.ru/set10/api/metainf"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="http://crystals.ru/set10/api/metainf metainf.xsd">
+    <ExternalService serviceType="EXCISE_VALIDATION"
+                     id="sbg.marking.external.service"
+                     localeKey="sbg.service.name">
+
+        <Description>SBG auto mark validation and FIFO substitution service.</Description>
+
+        <Options>
+            <URL key="marking.service.url" localeKey="sbg.option.url"/>
+            <Integer key="marking.service.connect.timeout.ms" localeKey="sbg.option.connect.timeout" minValue="500" maxValue="60000"/>
+            <Integer key="marking.service.read.timeout.ms" localeKey="sbg.option.read.timeout" minValue="500" maxValue="60000"/>
+        </Options>
+
+        <ExciseValidationPlugin id="sbg.marking.auto.plugin" localeKey="sbg.service.name">
+            <ProductTypes>SPIRITS</ProductTypes>
+            <ProductTypes>TOBACCO</ProductTypes>
+            <ProductTypes>FOOTWEAR</ProductTypes>
+            <ProductTypes>JEWELRY</ProductTypes>
+            <ProductTypes>PERFUMES</ProductTypes>
+            <ProductTypes>LIGHT_INDUSTRY</ProductTypes>
+            <ProductTypes>TYRES</ProductTypes>
+            <ProductTypes>PHOTO</ProductTypes>
+            <ProductTypes>MILK</ProductTypes>
+        </ExciseValidationPlugin>
+    </ExternalService>
+</SetIntegration>

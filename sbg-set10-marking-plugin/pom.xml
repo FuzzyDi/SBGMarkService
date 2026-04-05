@@ -1,0 +1,48 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>uz.sbg.marking</groupId>
+        <artifactId>sbg-marking-auto-km</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>sbg-set10-marking-plugin</artifactId>
+    <name>sbg-set10-marking-plugin</name>
+
+    <properties>
+        <set10.api.jar>${project.basedir}/../../knowledge_base/set10/sources/set10pos-api-0.0.0_DO_NOT_CHANGE_VERSION-SNAPSHOT.jar</set10.api.jar>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>uz.sbg.marking</groupId>
+            <artifactId>sbg-marking-contracts</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.16</version>
+        </dependency>
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
+        </dependency>
+        <dependency>
+            <groupId>ru.crystals</groupId>
+            <artifactId>set10pos-api</artifactId>
+            <version>0.0.0_DO_NOT_CHANGE_VERSION-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${set10.api.jar}</systemPath>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${SBG_MARKING_DB_URL:jdbc:postgresql://localhost:5432/sbg_marking}
+    username: ${SBG_MARKING_DB_USER:postgres}
+    password: ${SBG_MARKING_DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+sbg:
+  marking:
+    reservation:
+      ttl:
+        seconds: 900
+    cleanup:
+      interval:
+        ms: 60000
+    history:
+      max-size: 100000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
