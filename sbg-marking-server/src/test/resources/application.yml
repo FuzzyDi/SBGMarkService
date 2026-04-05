@@ -21,3 +21,6 @@ sbg:
         ms: 60000
     history:
       max-size: 5000
+    idempotency:
+      retention:
+        days: 1

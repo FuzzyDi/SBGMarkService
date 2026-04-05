@@ -31,6 +31,9 @@ CI (GitHub Actions):
 - `.github/workflows/ci.yml`
 - Automatically runs on `push` and `pull_request` to `main`
 - Verifies `sbg-marking-contracts` and `sbg-marking-server`
+- `.github/workflows/plugin-build.yml`
+- Builds `sbg-set10-marking-plugin` (manual or PR path-trigger), requires GitHub secret `SET10_API_JAR_BASE64`
+- If secret is missing, workflow is skipped with a notice (no failure)
 
 ## Run server
 
@@ -54,6 +57,7 @@ Default DB connection (can be overridden by env vars):
 - `SBG_MARKING_DB_URL=jdbc:postgresql://localhost:5432/sbg_marking`
 - `SBG_MARKING_DB_USER=postgres`
 - `SBG_MARKING_DB_PASSWORD=postgres`
+- `sbg.marking.idempotency.retention.days=30` (cleanup threshold for `idempotency_entries`)
 
 Flyway migration is applied on startup from:
 

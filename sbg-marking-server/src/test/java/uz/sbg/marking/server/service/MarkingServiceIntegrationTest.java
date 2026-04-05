@@ -16,7 +16,10 @@ import uz.sbg.marking.contracts.ResolveResult;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveRequest;
 import uz.sbg.marking.contracts.ReturnResolveAndReserveResponse;
 import uz.sbg.marking.server.model.MarkRecord;
+import uz.sbg.marking.server.persistence.entity.IdempotencyEntryEntity;
+import uz.sbg.marking.server.persistence.repository.IdempotencyEntryRepository;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +30,9 @@ class MarkingServiceIntegrationTest {
 
     @Autowired
     private MarkingService markingService;
+
+    @Autowired
+    private IdempotencyEntryRepository idempotencyEntryRepository;
 
     @Test
     void shouldAutoSelectFirstFifoMarkWhenScannedIsAbsent() {
@@ -89,6 +95,24 @@ class MarkingServiceIntegrationTest {
         assertThat(second.getResult()).isEqualTo(ResolveResult.ACCEPT_SCANNED);
         assertThat(second.getReservationId()).isEqualTo(first.getReservationId());
         assertThat(second.getAppliedMark()).isEqualTo(first.getAppliedMark());
+    }
+
+    @Test
+    void shouldCleanupOldIdempotencyEntries() {
+        IdempotencyEntryEntity oldEntry = new IdempotencyEntryEntity();
+        oldEntry.setRoute("resolve");
+        oldEntry.setOperationId("op-old-idem");
+        oldEntry.setResponseType(OperationResponse.class.getName());
+        oldEntry.setResponsePayload("{\"success\":true,\"errorCode\":\"NONE\",\"message\":\"ok\"}");
+        oldEntry.setCreatedAt(Instant.now().minusSeconds(172800));
+        oldEntry.setUpdatedAt(Instant.now().minusSeconds(172800));
+        idempotencyEntryRepository.save(oldEntry);
+
+        assertThat(idempotencyEntryRepository.findByRouteAndOperationId("resolve", "op-old-idem")).isPresent();
+
+        markingService.scheduledCleanup();
+
+        assertThat(idempotencyEntryRepository.findByRouteAndOperationId("resolve", "op-old-idem")).isEmpty();
     }
 
     private void importMarks(List<ImportMarkItem> items) {

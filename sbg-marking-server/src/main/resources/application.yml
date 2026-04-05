@@ -24,6 +24,9 @@ sbg:
         ms: 60000
     history:
       max-size: 100000
+    idempotency:
+      retention:
+        days: 30
 
 management:
   endpoints:

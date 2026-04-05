@@ -83,10 +83,10 @@ public class MarkingController {
     }
 
     @GetMapping("/reports/history")
-    public ResponseEntity<HistoryQueryResponse> history(@RequestParam(required = false) String markCode,
-                                                        @RequestParam(required = false) Instant from,
-                                                        @RequestParam(required = false) Instant to,
-                                                        @RequestParam(required = false) Integer limit) {
+    public ResponseEntity<HistoryQueryResponse> history(@RequestParam(name = "markCode", required = false) String markCode,
+                                                        @RequestParam(name = "from", required = false) Instant from,
+                                                        @RequestParam(name = "to", required = false) Instant to,
+                                                        @RequestParam(name = "limit", required = false) Integer limit) {
         return ResponseEntity.ok(markingService.queryHistory(markCode, from, to, limit));
     }
 }

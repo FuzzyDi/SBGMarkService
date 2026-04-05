@@ -68,10 +68,12 @@ public class MarkingService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final Duration reservationTtl;
+    private final Duration idempotencyRetention;
     private final int historyMaxSize;
     private final Object monitor = new Object();
 
     public MarkingService(@Value("${sbg.marking.reservation.ttl.seconds:900}") long reservationTtlSec,
+                          @Value("${sbg.marking.idempotency.retention.days:30}") long idempotencyRetentionDays,
                           @Value("${sbg.marking.history.max-size:100000}") int historyMaxSize,
                           MarkRepository markRepository,
                           ReservationRepository reservationRepository,
@@ -85,6 +87,7 @@ public class MarkingService {
         this.objectMapper = objectMapper;
         this.clock = Clock.systemUTC();
         this.reservationTtl = Duration.ofSeconds(Math.max(60, reservationTtlSec));
+        this.idempotencyRetention = Duration.ofDays(Math.max(1, idempotencyRetentionDays));
         this.historyMaxSize = Math.max(1000, historyMaxSize);
     }
 
@@ -113,6 +116,7 @@ public class MarkingService {
             history.addAll(loadedHistory.subList(fromIndex, loadedHistory.size()));
 
             cleanupExpiredReservations();
+            cleanupExpiredIdempotencyEntries();
         }
     }
 
@@ -509,6 +513,7 @@ public class MarkingService {
     public void scheduledCleanup() {
         synchronized (monitor) {
             cleanupExpiredReservations();
+            cleanupExpiredIdempotencyEntries();
         }
     }
 
@@ -695,6 +700,16 @@ public class MarkingService {
                 saveMark(mark);
             }
             removeReservation(reservation.getId());
+        }
+    }
+
+    private void cleanupExpiredIdempotencyEntries() {
+        Instant threshold = Instant.now(clock).minus(idempotencyRetention);
+        long deleted = idempotencyEntryRepository.deleteByUpdatedAtBefore(threshold);
+        if (deleted > 0) {
+            resolveIdempotency.clear();
+            returnResolveIdempotency.clear();
+            operationIdempotency.clear();
         }
     }
 
