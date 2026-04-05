@@ -8,7 +8,7 @@
 
     <entry key="sbg.error.no.candidate">Нет доступного кода маркировки для товара.</entry>
     <entry key="sbg.error.invalid.for.product">Сканированный код маркировки не относится к этому товару.</entry>
-    <entry key="sbg.error.already.returned">Код маркировки уже возвращался ранее.</entry>
+    <entry key="sbg.error.already.returned">Код маркировки уже был возвращен ранее.</entry>
     <entry key="sbg.error.service.unavailable">Сервис маркировки временно недоступен.</entry>
     <entry key="sbg.error.generic">Операция с кодом маркировки отклонена.</entry>
 </properties>
