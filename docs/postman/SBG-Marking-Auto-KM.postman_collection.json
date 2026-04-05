@@ -1,0 +1,638 @@
+{
+  "info": {
+    "_postman_id": "41f2f379-e6a4-47ea-8d7f-fd1276bc457c",
+    "name": "SBG Marking Auto KM API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Ready-to-run API checks for import, sale/return lifecycle, and reports."
+  },
+  "item": [
+    {
+      "name": "Health / Actuator",
+      "item": [
+        {
+          "name": "GET /actuator/health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"status is UP\", function () {",
+                  "  pm.expect(data.status).to.eql(\"UP\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/actuator/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Import",
+      "item": [
+        {
+          "name": "POST /api/v1/km/import/full (Seed)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"seedBatchId\", \"seed-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"import response has counters\", function () {",
+                  "  pm.expect(data).to.have.property(\"added\");",
+                  "  pm.expect(data).to.have.property(\"updated\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{seedBatchId}}\",\n  \"items\": [\n    {\n      \"markCode\": \"KM-1001\",\n      \"item\": \"{{productItem}}\",\n      \"gtin\": \"{{productGtin}}\",\n      \"productType\": \"{{productType}}\",\n      \"valid\": true,\n      \"blocked\": false,\n      \"status\": \"AVAILABLE\",\n      \"fifoTsEpochMs\": 1000\n    },\n    {\n      \"markCode\": \"KM-1002\",\n      \"item\": \"{{productItem}}\",\n      \"gtin\": \"{{productGtin}}\",\n      \"productType\": \"{{productType}}\",\n      \"valid\": true,\n      \"blocked\": false,\n      \"status\": \"AVAILABLE\",\n      \"fifoTsEpochMs\": 2000\n    },\n    {\n      \"markCode\": \"KM-9999-BAD\",\n      \"item\": \"{{productItem}}\",\n      \"gtin\": \"{{productGtin}}\",\n      \"productType\": \"{{productType}}\",\n      \"valid\": false,\n      \"blocked\": false,\n      \"status\": \"AVAILABLE\",\n      \"fifoTsEpochMs\": 3000\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/km/import/full"
+          }
+        },
+        {
+          "name": "POST /api/v1/km/import/delta",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"deltaBatchId\", \"delta-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{deltaBatchId}}\",\n  \"items\": [\n    {\n      \"markCode\": \"KM-1003\",\n      \"item\": \"{{productItem}}\",\n      \"gtin\": \"{{productGtin}}\",\n      \"productType\": \"{{productType}}\",\n      \"valid\": true,\n      \"blocked\": false,\n      \"status\": \"AVAILABLE\",\n      \"fifoTsEpochMs\": 4000\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/km/import/delta"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sale Success Flow",
+      "item": [
+        {
+          "name": "POST /api/v1/marking/resolve-and-reserve (Auto FIFO)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"saleResolveOpId\", \"sale-resolve-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"resolve accepted\", function () {",
+                  "  pm.expect([\"ACCEPT_AUTO_SELECTED\", \"ACCEPT_SCANNED\"]).to.include(data.result);",
+                  "});",
+                  "if (data.reservationId) { pm.collectionVariables.set(\"saleReservationId\", data.reservationId); }",
+                  "if (data.appliedMark) { pm.collectionVariables.set(\"saleAppliedMark\", data.appliedMark); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{saleResolveOpId}}\",\n  \"shopId\": \"{{shopId}}\",\n  \"posId\": \"{{posId}}\",\n  \"cashierId\": \"{{cashierId}}\",\n  \"product\": {\n    \"barcode\": \"{{productBarcode}}\",\n    \"item\": \"{{productItem}}\",\n    \"productType\": \"{{productType}}\",\n    \"gtin\": \"{{productGtin}}\"\n  },\n  \"scannedMark\": \"NOT-IN-POOL\",\n  \"quantity\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/resolve-and-reserve"
+          }
+        },
+        {
+          "name": "POST /api/v1/marking/sold-confirm",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"soldConfirmOpId\", \"sold-confirm-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"sale confirmed\", function () {",
+                  "  pm.expect(data.success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{soldConfirmOpId}}\",\n  \"reservationId\": \"{{saleReservationId}}\",\n  \"markCode\": \"{{saleAppliedMark}}\",\n  \"receiptId\": \"SALE-{{soldConfirmOpId}}\",\n  \"receiptNumber\": 1001,\n  \"shiftNumber\": 1,\n  \"fiscalDocId\": 1001001,\n  \"fiscalSign\": 9001001\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/sold-confirm"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sale Cancel Flow (Optional)",
+      "item": [
+        {
+          "name": "POST /api/v1/marking/resolve-and-reserve (for release)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"saleReleaseResolveOpId\", \"sale-release-resolve-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "if (data.reservationId) { pm.collectionVariables.set(\"saleReleaseReservationId\", data.reservationId); }",
+                  "if (data.appliedMark) { pm.collectionVariables.set(\"saleReleaseMark\", data.appliedMark); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{saleReleaseResolveOpId}}\",\n  \"shopId\": \"{{shopId}}\",\n  \"posId\": \"{{posId}}\",\n  \"cashierId\": \"{{cashierId}}\",\n  \"product\": {\n    \"barcode\": \"{{productBarcode}}\",\n    \"item\": \"{{productItem}}\",\n    \"productType\": \"{{productType}}\",\n    \"gtin\": \"{{productGtin}}\"\n  },\n  \"scannedMark\": \"NOT-IN-POOL-REL\",\n  \"quantity\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/resolve-and-reserve"
+          }
+        },
+        {
+          "name": "POST /api/v1/marking/sale-release",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"saleReleaseOpId\", \"sale-release-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{saleReleaseOpId}}\",\n  \"reservationId\": \"{{saleReleaseReservationId}}\",\n  \"markCode\": \"{{saleReleaseMark}}\",\n  \"reason\": \"Receipt canceled by cashier\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/sale-release"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Return Success Flow",
+      "item": [
+        {
+          "name": "POST /api/v1/marking/return-resolve-and-reserve",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"returnResolveOpId\", \"return-resolve-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"return resolve success\", function () {",
+                  "  pm.expect(data.success).to.eql(true);",
+                  "});",
+                  "if (data.reservationId) { pm.collectionVariables.set(\"returnReservationId\", data.reservationId); }",
+                  "if (data.appliedMark) { pm.collectionVariables.set(\"returnAppliedMark\", data.appliedMark); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{returnResolveOpId}}\",\n  \"shopId\": \"{{shopId}}\",\n  \"posId\": \"{{posId}}\",\n  \"cashierId\": \"{{cashierId}}\",\n  \"product\": {\n    \"barcode\": \"{{productBarcode}}\",\n    \"item\": \"{{productItem}}\",\n    \"productType\": \"{{productType}}\",\n    \"gtin\": \"{{productGtin}}\"\n  },\n  \"scannedMark\": \"{{saleAppliedMark}}\",\n  \"saleReceiptId\": \"SALE-{{soldConfirmOpId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/return-resolve-and-reserve"
+          }
+        },
+        {
+          "name": "POST /api/v1/marking/return-confirm",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"returnConfirmOpId\", \"return-confirm-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"return confirmed\", function () {",
+                  "  pm.expect(data.success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{returnConfirmOpId}}\",\n  \"reservationId\": \"{{returnReservationId}}\",\n  \"markCode\": \"{{returnAppliedMark}}\",\n  \"receiptId\": \"RETURN-{{returnConfirmOpId}}\",\n  \"receiptNumber\": 2001,\n  \"shiftNumber\": 1,\n  \"fiscalDocId\": 2001001,\n  \"fiscalSign\": 8001001\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/return-confirm"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Return Cancel Flow (Optional)",
+      "item": [
+        {
+          "name": "POST /api/v1/marking/return-resolve-and-reserve (for release)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"returnReleaseResolveOpId\", \"return-release-resolve-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "if (data.reservationId) { pm.collectionVariables.set(\"returnReleaseReservationId\", data.reservationId); }",
+                  "if (data.appliedMark) { pm.collectionVariables.set(\"returnReleaseMark\", data.appliedMark); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{returnReleaseResolveOpId}}\",\n  \"shopId\": \"{{shopId}}\",\n  \"posId\": \"{{posId}}\",\n  \"cashierId\": \"{{cashierId}}\",\n  \"product\": {\n    \"barcode\": \"{{productBarcode}}\",\n    \"item\": \"{{productItem}}\",\n    \"productType\": \"{{productType}}\",\n    \"gtin\": \"{{productGtin}}\"\n  },\n  \"scannedMark\": \"{{saleAppliedMark}}\",\n  \"saleReceiptId\": \"SALE-{{soldConfirmOpId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/return-resolve-and-reserve"
+          }
+        },
+        {
+          "name": "POST /api/v1/marking/return-release",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"returnReleaseOpId\", \"return-release-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationId\": \"{{returnReleaseOpId}}\",\n  \"reservationId\": \"{{returnReleaseReservationId}}\",\n  \"markCode\": \"{{returnReleaseMark}}\",\n  \"reason\": \"Refund canceled by cashier\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/marking/return-release"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "GET /api/v1/reports/summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"summary contains counters\", function () {",
+                  "  pm.expect(data).to.have.property(\"totalMarks\");",
+                  "  pm.expect(data).to.have.property(\"soldMarks\");",
+                  "  pm.expect(data).to.have.property(\"activeReservations\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reports/summary"
+          }
+        },
+        {
+          "name": "GET /api/v1/reports/history?limit=20",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"history payload contains events array\", function () {",
+                  "  pm.expect(data).to.have.property(\"events\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reports/history?limit=20"
+          }
+        },
+        {
+          "name": "GET /api/v1/km/debug/marks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/km/debug/marks"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "seedBatchId",
+      "value": ""
+    },
+    {
+      "key": "deltaBatchId",
+      "value": ""
+    },
+    {
+      "key": "saleResolveOpId",
+      "value": ""
+    },
+    {
+      "key": "saleReservationId",
+      "value": ""
+    },
+    {
+      "key": "saleAppliedMark",
+      "value": ""
+    },
+    {
+      "key": "soldConfirmOpId",
+      "value": ""
+    },
+    {
+      "key": "saleReleaseResolveOpId",
+      "value": ""
+    },
+    {
+      "key": "saleReleaseReservationId",
+      "value": ""
+    },
+    {
+      "key": "saleReleaseMark",
+      "value": ""
+    },
+    {
+      "key": "saleReleaseOpId",
+      "value": ""
+    },
+    {
+      "key": "returnResolveOpId",
+      "value": ""
+    },
+    {
+      "key": "returnReservationId",
+      "value": ""
+    },
+    {
+      "key": "returnAppliedMark",
+      "value": ""
+    },
+    {
+      "key": "returnConfirmOpId",
+      "value": ""
+    },
+    {
+      "key": "returnReleaseResolveOpId",
+      "value": ""
+    },
+    {
+      "key": "returnReleaseReservationId",
+      "value": ""
+    },
+    {
+      "key": "returnReleaseMark",
+      "value": ""
+    },
+    {
+      "key": "returnReleaseOpId",
+      "value": ""
+    }
+  ]
+}

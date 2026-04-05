@@ -103,6 +103,7 @@ Flyway migration is applied on startup from:
 ## E2E validation
 
 - Full cashier flow checklist: `docs/e2e-staging-cashier-checklist.md`
+- Postman collection and environment: `docs/postman/`
 
 ## FIFO and lifecycle
 
