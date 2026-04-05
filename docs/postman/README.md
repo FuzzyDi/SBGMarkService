@@ -21,9 +21,11 @@ This folder contains ready-to-run Postman artifacts for manual E2E checks.
    - `Return Success Flow / Return Confirm`
    - `Reports / Summary`
    - `Reports / History`
+   - `Reports / GET /api/v1/km/debug/fifo-by-product`
 
 ## Notes
 
 - Collection scripts automatically store `reservationId` and `appliedMark` into collection variables.
 - `Sale Cancel Flow` and `Return Cancel Flow` are optional and demonstrate `sale-release` and `return-release`.
 - To test idempotency, repeat the same request without changing `operationId` variables.
+- FIFO debug request shows why each mark is selected or skipped (`reason`) for the current product filter.

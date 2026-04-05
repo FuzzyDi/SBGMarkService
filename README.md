@@ -99,6 +99,7 @@ Flyway migration is applied on startup from:
 - `GET /api/v1/reports/summary`
 - `GET /api/v1/reports/history`
 - `GET /api/v1/km/debug/marks`
+- `GET /api/v1/km/debug/fifo-by-product?productType=...&item=...&gtin=...&limit=...`
 
 ## E2E validation
 
@@ -112,3 +113,4 @@ Flyway migration is applied on startup from:
 - FIFO selection uses `fifoTs` for eligible marks.
 - After successful return confirm, mark is returned to `AVAILABLE` and `fifoTs` is refreshed.
 - Idempotency for all operation routes is persisted in DB (`idempotency_entries`) by `route + operationId`.
+- Debug FIFO endpoint returns queue position and suitability reason (`OK`, `BLOCKED_FLAG_TRUE`, `STATUS_*`, etc.).

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
+import uz.sbg.marking.contracts.FifoByProductResponse;
 import uz.sbg.marking.contracts.ImportMarkItem;
 import uz.sbg.marking.contracts.ImportRequest;
 import uz.sbg.marking.contracts.MarkOperationRequest;
@@ -95,6 +96,34 @@ class MarkingServiceIntegrationTest {
         assertThat(second.getResult()).isEqualTo(ResolveResult.ACCEPT_SCANNED);
         assertThat(second.getReservationId()).isEqualTo(first.getReservationId());
         assertThat(second.getAppliedMark()).isEqualTo(first.getAppliedMark());
+    }
+
+    @Test
+    void shouldReturnFifoQueueWithSaleSuitabilityReasons() {
+        importMarks(List.of(
+                mark("KM-Q-1", "ITEM-QUEUE", "GTIN-QUEUE", "TOBACCO", true, false, MarkStatus.AVAILABLE, 1000L),
+                mark("KM-Q-2", "ITEM-QUEUE", "GTIN-QUEUE", "TOBACCO", true, true, MarkStatus.AVAILABLE, 2000L),
+                mark("KM-Q-3", "ITEM-QUEUE", "GTIN-QUEUE", "TOBACCO", true, false, MarkStatus.SOLD, 3000L)
+        ));
+
+        FifoByProductResponse queue = markingService.debugFifoByProduct("ITEM-QUEUE", "GTIN-QUEUE", "TOBACCO", 10);
+
+        assertThat(queue.getTotal()).isEqualTo(3);
+        assertThat(queue.getSelectableCount()).isEqualTo(1);
+        assertThat(queue.getFirstSelectableMark()).isEqualTo("KM-Q-1");
+        assertThat(queue.getCandidates()).hasSize(3);
+
+        assertThat(queue.getCandidates().get(0).getMarkCode()).isEqualTo("KM-Q-1");
+        assertThat(queue.getCandidates().get(0).isSelectable()).isTrue();
+        assertThat(queue.getCandidates().get(0).getReason()).isEqualTo("OK");
+
+        assertThat(queue.getCandidates().get(1).getMarkCode()).isEqualTo("KM-Q-2");
+        assertThat(queue.getCandidates().get(1).isSelectable()).isFalse();
+        assertThat(queue.getCandidates().get(1).getReason()).isEqualTo("BLOCKED_FLAG_TRUE");
+
+        assertThat(queue.getCandidates().get(2).getMarkCode()).isEqualTo("KM-Q-3");
+        assertThat(queue.getCandidates().get(2).isSelectable()).isFalse();
+        assertThat(queue.getCandidates().get(2).getReason()).isEqualTo("STATUS_SOLD");
     }
 
     @Test

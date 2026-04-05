@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import uz.sbg.marking.contracts.ErrorCode;
+import uz.sbg.marking.contracts.FifoByProductResponse;
+import uz.sbg.marking.contracts.FifoCandidateView;
 import uz.sbg.marking.contracts.HistoryQueryResponse;
 import uz.sbg.marking.contracts.ImportMarkItem;
 import uz.sbg.marking.contracts.ImportRequest;
@@ -467,6 +469,74 @@ public class MarkingService {
         }
     }
 
+    public FifoByProductResponse debugFifoByProduct(String item, String gtin, String productType, Integer limit) {
+        synchronized (monitor) {
+            int maxItems = limit == null ? 200 : Math.max(1, Math.min(1000, limit));
+
+            ProductRef product = new ProductRef();
+            product.setItem(item);
+            product.setGtin(gtin);
+            product.setProductType(productType);
+
+            FifoByProductResponse response = new FifoByProductResponse();
+            response.setGeneratedAt(Instant.now(clock));
+            response.setProduct(product);
+
+            if (isBlank(productType) || (isBlank(item) && isBlank(gtin))) {
+                response.setMessage("productType and one of item/gtin are required.");
+                return response;
+            }
+
+            List<MarkRecord> matching = marks.values().stream()
+                    .filter(mark -> matchesProduct(mark, product))
+                    .sorted(FIFO_COMPARATOR)
+                    .limit(maxItems)
+                    .collect(Collectors.toList());
+
+            List<FifoCandidateView> candidates = new ArrayList<>();
+            int queuePosition = 1;
+            int selectableCount = 0;
+            String firstSelectableMark = null;
+
+            for (MarkRecord mark : matching) {
+                boolean selectable = eligibleForSale(mark);
+                if (selectable) {
+                    selectableCount++;
+                    if (firstSelectableMark == null) {
+                        firstSelectableMark = mark.getMarkCode();
+                    }
+                }
+
+                FifoCandidateView candidate = new FifoCandidateView();
+                candidate.setQueuePosition(queuePosition++);
+                candidate.setMarkCode(mark.getMarkCode());
+                candidate.setItem(mark.getItem());
+                candidate.setGtin(mark.getGtin());
+                candidate.setProductType(mark.getProductType());
+                candidate.setValid(mark.isValid());
+                candidate.setBlocked(mark.isBlocked());
+                candidate.setStatus(mark.getStatus());
+                candidate.setFifoTsEpochMs(mark.getFifoTs() == null ? null : mark.getFifoTs().toEpochMilli());
+                candidate.setSelectable(selectable);
+                candidate.setReason(debugSaleSuitabilityReason(mark));
+                candidates.add(candidate);
+            }
+
+            response.setCandidates(candidates);
+            response.setTotal(candidates.size());
+            response.setSelectableCount(selectableCount);
+            response.setFirstSelectableMark(firstSelectableMark);
+            if (candidates.isEmpty()) {
+                response.setMessage("No marks found for provided product filter.");
+            } else if (selectableCount == 0) {
+                response.setMessage("No selectable marks found for provided product filter.");
+            } else {
+                response.setMessage("OK");
+            }
+            return response;
+        }
+    }
+
     public HistoryQueryResponse queryHistory(String markCode, Instant from, Instant to, Integer limit) {
         synchronized (monitor) {
             int maxItems = limit == null ? 200 : Math.max(1, Math.min(5000, limit));
@@ -768,6 +838,25 @@ public class MarkingService {
                 && mark.isValid()
                 && !mark.isBlocked()
                 && isBlank(mark.getActiveReservationId());
+    }
+
+    private String debugSaleSuitabilityReason(MarkRecord mark) {
+        if (mark == null) {
+            return "MARK_NOT_FOUND";
+        }
+        if (!mark.isValid()) {
+            return "INVALID_FLAG_FALSE";
+        }
+        if (mark.isBlocked()) {
+            return "BLOCKED_FLAG_TRUE";
+        }
+        if (!isBlank(mark.getActiveReservationId())) {
+            return "HAS_ACTIVE_RESERVATION";
+        }
+        if (mark.getStatus() != MarkStatus.AVAILABLE) {
+            return "STATUS_" + mark.getStatus();
+        }
+        return "OK";
     }
 
     private void recordResolveEvent(String eventType, ResolveAndReserveRequest request, ResolveAndReserveResponse response) {

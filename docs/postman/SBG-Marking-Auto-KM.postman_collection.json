@@ -557,6 +557,33 @@
             "header": [],
             "url": "{{baseUrl}}/api/v1/km/debug/marks"
           }
+        },
+        {
+          "name": "GET /api/v1/km/debug/fifo-by-product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test(\"fifo debug payload shape\", function () {",
+                  "  pm.expect(data).to.have.property(\"total\");",
+                  "  pm.expect(data).to.have.property(\"selectableCount\");",
+                  "  pm.expect(data).to.have.property(\"candidates\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/km/debug/fifo-by-product?productType={{productType}}&item={{productItem}}&gtin={{productGtin}}&limit=20"
+          }
         }
       ]
     }

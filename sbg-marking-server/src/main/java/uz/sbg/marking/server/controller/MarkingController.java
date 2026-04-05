@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.sbg.marking.contracts.FifoByProductResponse;
 import uz.sbg.marking.contracts.HistoryQueryResponse;
 import uz.sbg.marking.contracts.ImportRequest;
 import uz.sbg.marking.contracts.ImportResponse;
@@ -75,6 +76,14 @@ public class MarkingController {
     @GetMapping("/km/debug/marks")
     public ResponseEntity<List<MarkRecord>> debugMarks() {
         return ResponseEntity.ok(markingService.snapshotMarks());
+    }
+
+    @GetMapping("/km/debug/fifo-by-product")
+    public ResponseEntity<FifoByProductResponse> debugFifoByProduct(@RequestParam(name = "item", required = false) String item,
+                                                                    @RequestParam(name = "gtin", required = false) String gtin,
+                                                                    @RequestParam(name = "productType", required = false) String productType,
+                                                                    @RequestParam(name = "limit", required = false) Integer limit) {
+        return ResponseEntity.ok(markingService.debugFifoByProduct(item, gtin, productType, limit));
     }
 
     @GetMapping("/reports/summary")

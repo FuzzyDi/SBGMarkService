@@ -111,6 +111,39 @@ class MarkingControllerIntegrationTest {
                 .andExpect(jsonPath("$.events").isArray());
     }
 
+    @Test
+    void fifoByProductEndpointShouldReturnQueueAndReasons() throws Exception {
+        ImportRequest importRequest = new ImportRequest();
+        importRequest.setBatchId("api-batch-3");
+        importRequest.setItems(List.of(
+                mark("KM-FIFO-1", 1000L),
+                mark("KM-FIFO-2", 2000L)
+        ));
+        importRequest.getItems().get(1).setBlocked(true);
+
+        mockMvc.perform(post("/api/v1/km/import/full")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(importRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.added").value(2));
+
+        mockMvc.perform(get("/api/v1/km/debug/fifo-by-product")
+                        .param("productType", "TOBACCO")
+                        .param("item", "ITEM-1")
+                        .param("gtin", "GTIN-1")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.selectableCount").value(1))
+                .andExpect(jsonPath("$.firstSelectableMark").value("KM-FIFO-1"))
+                .andExpect(jsonPath("$.candidates[0].markCode").value("KM-FIFO-1"))
+                .andExpect(jsonPath("$.candidates[0].selectable").value(true))
+                .andExpect(jsonPath("$.candidates[0].reason").value("OK"))
+                .andExpect(jsonPath("$.candidates[1].markCode").value("KM-FIFO-2"))
+                .andExpect(jsonPath("$.candidates[1].selectable").value(false))
+                .andExpect(jsonPath("$.candidates[1].reason").value("BLOCKED_FLAG_TRUE"));
+    }
+
     private ImportMarkItem mark(String code, long fifoTsEpochMs) {
         ImportMarkItem item = new ImportMarkItem();
         item.setMarkCode(code);

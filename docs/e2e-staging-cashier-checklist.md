@@ -36,6 +36,17 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/v1/km/import/full 
 
 Expected: `added=2`.
 
+Optional FIFO diagnostics:
+
+```powershell
+Invoke-RestMethod "http://localhost:8080/api/v1/km/debug/fifo-by-product?productType=TOBACCO&item=ITEM-1&gtin=GTIN-1&limit=10"
+```
+
+Expected:
+- `total` shows all marks of this product in FIFO order
+- `firstSelectableMark` shows mark that will be auto-selected
+- `candidates[*].reason` explains why mark is selectable or skipped
+
 ## 3) Sale flow (cashier)
 
 1. Cashier scans product barcode of marked item.
