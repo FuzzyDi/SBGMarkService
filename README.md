@@ -151,6 +151,7 @@ Role scope:
 - Postman collection and environment: `docs/postman/`
 - Excel import guide: `docs/km-import-excel.md`
 - Management + validation API guide: `docs/marking-management-api.md`
+- Windows Server deployment guide (192.168.80.31): `docs/windows-server-192.168.80.31.md`
 
 ## FIFO and lifecycle
 

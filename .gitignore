@@ -5,6 +5,7 @@
 
 # Environment
 .env
+deploy/windows-server/marking-server.env
 
 # IDE
 .idea/
@@ -14,3 +15,8 @@
 # OS
 Thumbs.db
 Desktop.ini
+
+# Windows deployment runtime files
+deploy/windows-server/sbg-marking-server.jar
+deploy/windows-server/logs/
+deploy/windows-server/run/
