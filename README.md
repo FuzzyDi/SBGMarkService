@@ -13,6 +13,19 @@ $env:MAVEN_OPTS='-Dmaven.repo.local=E:\Projects\SbgPosAgent\marking-auto-km\.m2'
 mvn -DskipTests package
 ```
 
+## Tests
+
+```powershell
+$env:MAVEN_OPTS='-Dmaven.repo.local=E:\Projects\SbgPosAgent\marking-auto-km\.m2'
+mvn -pl sbg-marking-server -am test
+```
+
+Integration tests use in-memory H2 for:
+
+- FIFO auto selection
+- sale -> sold confirm -> return -> return confirm
+- idempotency by `operationId`
+
 CI (GitHub Actions):
 
 - `.github/workflows/ci.yml`
