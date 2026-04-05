@@ -63,6 +63,17 @@ Copy-Item .env.staging.example .env
 docker compose -f docker-compose.staging.yml up -d --build
 ```
 
+Or use helper scripts:
+
+```powershell
+cd E:\Projects\SbgPosAgent\marking-auto-km
+.\scripts\staging-up.ps1
+.\scripts\staging-smoke.ps1
+.\scripts\staging-down.ps1
+```
+
+Use `.\scripts\staging-down.ps1 -WithVolumes` to remove volumes too.
+
 Default DB connection (can be overridden by env vars):
 
 - `SBG_MARKING_DB_URL=jdbc:postgresql://localhost:5432/sbg_marking`
@@ -87,6 +98,10 @@ Flyway migration is applied on startup from:
 - `GET /api/v1/reports/summary`
 - `GET /api/v1/reports/history`
 - `GET /api/v1/km/debug/marks`
+
+## E2E validation
+
+- Full cashier flow checklist: `docs/e2e-staging-cashier-checklist.md`
 
 ## FIFO and lifecycle
 
