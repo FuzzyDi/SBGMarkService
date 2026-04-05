@@ -87,6 +87,14 @@ Default DB connection (can be overridden by env vars):
 - `SBG_MARKING_DB_PASSWORD=postgres`
 - `sbg.marking.idempotency.retention.days=30` (cleanup threshold for `idempotency_entries`)
 
+Staging auth defaults in `.env.staging.example`:
+
+- `SBG_MARKING_AUTH_ENABLED=true`
+- `SBG_MARKING_AUTH_ADMIN_TOKEN=admin-secret-change-me`
+- `SBG_MARKING_AUTH_OPERATOR_TOKEN=operator-secret-change-me`
+
+`scripts/staging-smoke.ps1` auto-reads `.env` and sends role/token headers when auth is enabled.
+
 Flyway migration is applied on startup from:
 
 - `src/main/resources/db/migration`
