@@ -111,3 +111,19 @@ In Set Retail 10 plugin service options, set:
 - `marking.service.read.timeout.ms = 5000` (or higher)
 
 Then restart plugin/service in Set Retail environment.
+
+## 9. Current production assumptions (fixed)
+
+- Business flow is fully automatic for KM substitution:
+- no manual selection list on POS
+- scanned KM is accepted when suitable
+- if scanned KM is absent in pool, backend auto-selects first suitable FIFO KM
+- if no suitable KM exists, operation is rejected by backend
+- For this deployment security is expected from external system perimeter, so API auth can stay disabled:
+- `SBG_MARKING_AUTH_ENABLED=false`
+
+## 10. Plugin artifact hygiene on cashier hosts
+
+- Deploy only the actual release jar: `sbg-set10-marking-plugin-1.0.0.jar`.
+- Remove old/stale jars with `SNAPSHOT` suffix from cashier plugin directories.
+- Reason: old SNAPSHOT artifact may miss `Implementation-Version` in `MANIFEST.MF`, which causes warning in cash logs.

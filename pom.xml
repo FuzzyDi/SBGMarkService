@@ -5,7 +5,7 @@
 
     <groupId>uz.sbg.marking</groupId>
     <artifactId>sbg-marking-auto-km</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
     <name>sbg-marking-auto-km</name>
 
@@ -63,6 +63,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
+                            <Implementation-Version>${project.version}</Implementation-Version>
                             <Build-Date>${maven.build.timestamp}</Build-Date>
                             <Project>${project.name}</Project>
                             <Implementation-Vendor>SBG (Soft Business Group)</Implementation-Vendor>

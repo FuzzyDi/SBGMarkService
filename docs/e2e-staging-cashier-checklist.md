@@ -2,6 +2,14 @@
 
 This checklist validates the full KM lifecycle with staging server.
 
+## 0) Plugin artifact pre-check on cashier side
+
+- Ensure cashier host uses `sbg-set10-marking-plugin-1.0.0.jar`.
+- Remove old `*SNAPSHOT.jar` plugin copies from cashier plugin directory.
+- Verify plugin endpoint in Set10 options:
+- `marking.service.url = http://192.168.80.31:8080` for production server
+- or `http://localhost:8080` for local staging
+
 ## 1) Start staging
 
 ```powershell

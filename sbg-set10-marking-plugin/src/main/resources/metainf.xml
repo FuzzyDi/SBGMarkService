@@ -26,6 +26,12 @@
             <ProductTypes>TYRES</ProductTypes>
             <ProductTypes>PHOTO</ProductTypes>
             <ProductTypes>MILK</ProductTypes>
+            <ProductTypes>BEER</ProductTypes>
+            <ProductTypes>DRAFT_BEER</ProductTypes>
+            <ProductTypes>NONALCOHOLIC_BEER</ProductTypes>
+            <ProductTypes>WATER_AND_BEVERAGES</ProductTypes>
+            <ProductTypes>DRUGS</ProductTypes>
+            <ProductTypes>MEDICAL_DEVICES</ProductTypes>
         </ExciseValidationPlugin>
     </ExternalService>
 </SetIntegration>

@@ -8,6 +8,13 @@ Multi-module Maven project for automatic KM substitution in Set Retail 10:
 - `sbg-marking-server` - backend for FIFO selection, reservations, sale/return confirmation, import, history, reports.
 - `sbg-set10-marking-plugin` - Set10 `ExciseValidationPluginExtended` integration.
 
+## Current baseline (2026-04-06)
+
+- Consolidated project state, decisions and backlog: `docs/project-status-2026-04-06.md`
+- Core business rule: no manual KM selection on POS, only scanned KM or automatic first suitable FIFO KM.
+- Return flow is implemented: after `return-confirm` mark goes back to `AVAILABLE` and can be sold again.
+- Production mode can run with `SBG_MARKING_AUTH_ENABLED=false` when security is provided by external perimeter.
+
 ## Build
 
 ```powershell

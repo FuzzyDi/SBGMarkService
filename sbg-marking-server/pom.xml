@@ -6,7 +6,7 @@
     <parent>
         <groupId>uz.sbg.marking</groupId>
         <artifactId>sbg-marking-auto-km</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>sbg-marking-server</artifactId>
