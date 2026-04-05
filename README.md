@@ -13,6 +13,12 @@ $env:MAVEN_OPTS='-Dmaven.repo.local=E:\Projects\SbgPosAgent\marking-auto-km\.m2'
 mvn -DskipTests package
 ```
 
+CI (GitHub Actions):
+
+- `.github/workflows/ci.yml`
+- Automatically runs on `push` and `pull_request` to `main`
+- Verifies `sbg-marking-contracts` and `sbg-marking-server`
+
 ## Run server
 
 ```powershell
