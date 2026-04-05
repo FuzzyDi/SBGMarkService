@@ -12,7 +12,8 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    baseline-on-migrate: ${SBG_MARKING_FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: ${SBG_MARKING_FLYWAY_BASELINE_VERSION:0}
 
 sbg:
   marking:

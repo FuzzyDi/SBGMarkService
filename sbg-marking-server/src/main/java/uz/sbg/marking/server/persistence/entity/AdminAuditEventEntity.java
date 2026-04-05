@@ -5,8 +5,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -47,8 +48,8 @@ public class AdminAuditEventEntity {
     @Column(name = "message", length = 1024)
     private String message;
 
-    @Lob
-    @Column(name = "payload_json")
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "payload_json", columnDefinition = "TEXT")
     private String payloadJson;
 
     public Long getId() {
