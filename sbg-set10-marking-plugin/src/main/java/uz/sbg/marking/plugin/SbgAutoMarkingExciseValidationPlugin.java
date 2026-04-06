@@ -17,15 +17,15 @@ import ru.crystals.pos.spi.receipt.LineItem;
 import ru.crystals.pos.spi.receipt.MarkInfo;
 import ru.crystals.pos.spi.receipt.Receipt;
 import ru.crystals.pos.spi.receipt.ReceiptType;
-import uz.sbg.marking.contracts.ErrorCode;
-import uz.sbg.marking.contracts.MarkOperationRequest;
-import uz.sbg.marking.contracts.OperationResponse;
-import uz.sbg.marking.contracts.ProductRef;
-import uz.sbg.marking.contracts.ResolveAndReserveRequest;
-import uz.sbg.marking.contracts.ResolveAndReserveResponse;
-import uz.sbg.marking.contracts.ResolveResult;
-import uz.sbg.marking.contracts.ReturnResolveAndReserveRequest;
-import uz.sbg.marking.contracts.ReturnResolveAndReserveResponse;
+import uz.sbg.marking.plugin.dto.ErrorCode;
+import uz.sbg.marking.plugin.dto.MarkOperationRequest;
+import uz.sbg.marking.plugin.dto.OperationResponse;
+import uz.sbg.marking.plugin.dto.ProductRef;
+import uz.sbg.marking.plugin.dto.ResolveAndReserveRequest;
+import uz.sbg.marking.plugin.dto.ResolveAndReserveResponse;
+import uz.sbg.marking.plugin.dto.ResolveResult;
+import uz.sbg.marking.plugin.dto.ReturnResolveAndReserveRequest;
+import uz.sbg.marking.plugin.dto.ReturnResolveAndReserveResponse;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
@@ -38,8 +38,8 @@ import java.util.concurrent.ConcurrentMap;
 public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPluginExtended {
     public static final String PLUGIN_ID = "sbg.marking.auto.plugin";
 
-    private static final String ENDPOINT_SOLD_CONFIRM = "sold-confirm";
-    private static final String ENDPOINT_SALE_RELEASE = "sale-release";
+    private static final String ENDPOINT_SOLD_CONFIRM   = "sold-confirm";
+    private static final String ENDPOINT_SALE_RELEASE   = "sale-release";
     private static final String ENDPOINT_RETURN_CONFIRM = "return-confirm";
     private static final String ENDPOINT_RETURN_RELEASE = "return-release";
 
@@ -57,13 +57,18 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private SbgMarkingApiClient apiClient;
-    private final ConcurrentMap<String, ReservationBinding> saleBindingsByAlias = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, ReservationBinding> returnBindingsByAlias = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ReservationBinding> saleBindingsByAlias    = new ConcurrentHashMap<String, ReservationBinding>();
+    private final ConcurrentMap<String, ReservationBinding> returnBindingsByAlias  = new ConcurrentHashMap<String, ReservationBinding>();
 
     @PostConstruct
     public void init() {
         this.apiClient = new SbgMarkingApiClient(PluginConfig.fromProperties(properties), objectMapper);
+        log.info("SbgAutoMarkingPlugin initialized, baseUrl={}", PluginConfig.fromProperties(properties).getBaseUrl());
     }
+
+    // =========================================================================
+    // ExciseValidationPluginExtended — sale
+    // =========================================================================
 
     @Override
     public void validateExciseForSale(ExciseValidationRequest request, ExciseValidationCallback callback) {
@@ -76,19 +81,35 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
             payload.setScannedMark(request.getExcise());
             payload.setProduct(toProductRef(request));
 
+            log.info("validateExciseForSale: excise='{}', barcode='{}', productType='{}'",
+                    request.getExcise(), request.getBarcode(), request.getProductType());
+
             ResolveAndReserveResponse response = apiClient.resolveAndReserve(payload);
-            if (response.getResult() == ResolveResult.ACCEPT_SCANNED || response.getResult() == ResolveResult.ACCEPT_AUTO_SELECTED) {
-                registerBinding(saleBindingsByAlias, request.getExcise(), response.getAppliedMark(), response.getReservationId());
+
+            if (response.getResult() == ResolveResult.ACCEPT_SCANNED
+                    || response.getResult() == ResolveResult.ACCEPT_AUTO_SELECTED) {
+                registerBinding(saleBindingsByAlias,
+                        request.getExcise(), response.getAppliedMark(), response.getReservationId());
+                log.info("validateExciseForSale ALLOWED: excise='{}', result={}, reservationId='{}'",
+                        request.getExcise(), response.getResult(), response.getReservationId());
                 callback.onExciseValidationCompleted(allowResponse(request));
                 return;
             }
 
+            log.warn("validateExciseForSale DENIED: excise='{}', result={}, errorCode={}, message='{}'",
+                    request.getExcise(), response.getResult(), response.getErrorCode(), response.getMessage());
             callback.onExciseValidationCompleted(denyResponse(response.getErrorCode(), response.getMessage()));
+
         } catch (Exception ex) {
-            log.error("sale validation failed", ex);
-            callback.onExciseValidationCompleted(denyResponse(ErrorCode.SERVICE_UNAVAILABLE, res.getString("sbg.error.service.unavailable")));
+            log.error("validateExciseForSale failed for excise='{}'", request.getExcise(), ex);
+            callback.onExciseValidationCompleted(
+                    denyResponse(ErrorCode.SERVICE_UNAVAILABLE, res.getString("sbg.error.service.unavailable")));
         }
     }
+
+    // =========================================================================
+    // ExciseValidationPluginExtended — refund
+    // =========================================================================
 
     @Override
     public void validateExciseForRefund(ExciseValidationRequest request, ExciseValidationCallback callback) {
@@ -106,19 +127,34 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
                 payload.setSaleReceiptId(Integer.toString(saleReceipt.getNumber()));
             }
 
+            log.info("validateExciseForRefund: excise='{}', barcode='{}', productType='{}'",
+                    request.getExcise(), request.getBarcode(), request.getProductType());
+
             ReturnResolveAndReserveResponse response = apiClient.returnResolveAndReserve(payload);
+
             if (response.isSuccess()) {
-                registerBinding(returnBindingsByAlias, request.getExcise(), response.getAppliedMark(), response.getReservationId());
+                registerBinding(returnBindingsByAlias,
+                        request.getExcise(), response.getAppliedMark(), response.getReservationId());
+                log.info("validateExciseForRefund ALLOWED: excise='{}', reservationId='{}'",
+                        request.getExcise(), response.getReservationId());
                 callback.onExciseValidationCompleted(allowResponse(request));
                 return;
             }
 
+            log.warn("validateExciseForRefund DENIED: excise='{}', errorCode={}, message='{}'",
+                    request.getExcise(), response.getErrorCode(), response.getMessage());
             callback.onExciseValidationCompleted(denyResponse(response.getErrorCode(), response.getMessage()));
+
         } catch (Exception ex) {
-            log.error("refund validation failed", ex);
-            callback.onExciseValidationCompleted(denyResponse(ErrorCode.SERVICE_UNAVAILABLE, res.getString("sbg.error.service.unavailable")));
+            log.error("validateExciseForRefund failed for excise='{}'", request.getExcise(), ex);
+            callback.onExciseValidationCompleted(
+                    denyResponse(ErrorCode.SERVICE_UNAVAILABLE, res.getString("sbg.error.service.unavailable")));
         }
     }
+
+    // =========================================================================
+    // FiscalizationListener
+    // =========================================================================
 
     @Override
     public Feedback eventReceiptFiscalized(Receipt receipt, boolean isCancelReceipt) {
@@ -133,10 +169,14 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         boolean isRefund = receipt.getType() == ReceiptType.REFUND;
         String endpoint = resolveEndpoint(isRefund, isCancelReceipt);
         ConcurrentMap<String, ReservationBinding> bindingsByAlias = isRefund ? returnBindingsByAlias : saleBindingsByAlias;
-        List<MarkOperationRequest> requests = new ArrayList<>();
+
+        log.info("eventReceiptFiscalized: receiptType={}, isCancelReceipt={}, marks={}, endpoint={}",
+                receipt.getType(), isCancelReceipt, marks.size(), endpoint);
+
+        List<MarkOperationRequest> requests = new ArrayList<MarkOperationRequest>();
         for (String markAlias : marks) {
             ReservationBinding binding = bindingsByAlias.get(markAlias);
-            String markForBackend = binding != null && !isBlank(binding.getAppliedMark())
+            String markForBackend = (binding != null && !isBlank(binding.getAppliedMark()))
                     ? binding.getAppliedMark()
                     : markAlias;
 
@@ -155,25 +195,32 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         try {
             dispatch(endpoint, requests);
             cleanupReservations(endpoint, requests, marks);
+            log.info("eventReceiptFiscalized: all {} operations sent successfully via '{}'", requests.size(), endpoint);
             return null;
         } catch (Exception ex) {
-            log.error("failed to send fiscalized confirmation to backend", ex);
+            log.error("eventReceiptFiscalized: failed to send '{}' confirmation to backend", endpoint, ex);
             return createFeedback(endpoint, requests);
         }
     }
 
     @Override
     public void onRepeatSend(Feedback feedback) throws Exception {
-        if (feedback == null || feedback.getPayload() == null || feedback.getPayload().isBlank()) {
+        if (feedback == null || feedback.getPayload() == null || isBlank(feedback.getPayload())) {
             return;
         }
         PendingOperationsPayload payload = apiClient.fromJson(feedback.getPayload(), PendingOperationsPayload.class);
         if (payload == null) {
             return;
         }
+        log.info("onRepeatSend: retrying endpoint='{}', count={}", payload.getEndpoint(),
+                payload.getRequests() == null ? 0 : payload.getRequests().size());
         dispatch(payload.getEndpoint(), payload.getRequests());
         cleanupReservations(payload.getEndpoint(), payload.getRequests(), null);
     }
+
+    // =========================================================================
+    // dispatch — Java 8 style (no arrow switch)
+    // =========================================================================
 
     private void dispatch(String endpoint, List<MarkOperationRequest> requests) throws Exception {
         if (requests == null || requests.isEmpty()) {
@@ -181,19 +228,29 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         }
         for (MarkOperationRequest request : requests) {
             OperationResponse response;
-            switch (endpoint) {
-                case ENDPOINT_SOLD_CONFIRM -> response = apiClient.soldConfirm(request);
-                case ENDPOINT_SALE_RELEASE -> response = apiClient.saleRelease(request);
-                case ENDPOINT_RETURN_CONFIRM -> response = apiClient.returnConfirm(request);
-                case ENDPOINT_RETURN_RELEASE -> response = apiClient.returnRelease(request);
-                default -> throw new IllegalArgumentException("Unsupported endpoint: " + endpoint);
+            if (ENDPOINT_SOLD_CONFIRM.equals(endpoint)) {
+                response = apiClient.soldConfirm(request);
+            } else if (ENDPOINT_SALE_RELEASE.equals(endpoint)) {
+                response = apiClient.saleRelease(request);
+            } else if (ENDPOINT_RETURN_CONFIRM.equals(endpoint)) {
+                response = apiClient.returnConfirm(request);
+            } else if (ENDPOINT_RETURN_RELEASE.equals(endpoint)) {
+                response = apiClient.returnRelease(request);
+            } else {
+                throw new IllegalArgumentException("Unsupported endpoint: " + endpoint);
             }
 
             if (!response.isSuccess()) {
-                throw new IllegalStateException("Backend rejected operation: " + response.getErrorCode() + ", " + response.getMessage());
+                throw new IllegalStateException(
+                        "Backend rejected operation '" + endpoint + "': "
+                                + response.getErrorCode() + ", " + response.getMessage());
             }
         }
     }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
 
     private String resolveEndpoint(boolean isRefund, boolean isCancelReceipt) {
         if (isRefund) {
@@ -224,12 +281,10 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
             if (request == null) {
                 continue;
             }
-
             if (!isBlank(request.getReservationId())) {
                 removeBindingsByReservation(bindings, request.getReservationId());
                 continue;
             }
-
             if (!isBlank(request.getMarkCode())) {
                 bindings.remove(request.getMarkCode());
             }
@@ -241,12 +296,12 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         if (isBlank(reservationId)) {
             return;
         }
-
-        bindings.forEach((alias, binding) -> {
+        for (java.util.Map.Entry<String, ReservationBinding> entry : bindings.entrySet()) {
+            ReservationBinding binding = entry.getValue();
             if (binding != null && reservationId.equals(binding.getReservationId())) {
-                bindings.remove(alias, binding);
+                bindings.remove(entry.getKey(), binding);
             }
-        });
+        }
     }
 
     private void registerBinding(ConcurrentMap<String, ReservationBinding> bindings,
@@ -256,7 +311,6 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         if (isBlank(reservationId)) {
             return;
         }
-
         String resolvedAppliedMark = firstNonBlank(appliedMark, scannedMarkAlias);
         ReservationBinding binding = new ReservationBinding(reservationId, resolvedAppliedMark);
         if (!isBlank(scannedMarkAlias)) {
@@ -293,13 +347,13 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
     }
 
     private List<String> extractMarks(Receipt receipt) {
-        List<String> marks = new ArrayList<>();
+        List<String> marks = new ArrayList<String>();
         if (receipt == null || receipt.getLineItems() == null) {
             return marks;
         }
         for (LineItem lineItem : receipt.getLineItems()) {
             String mark = extractMark(lineItem);
-            if (mark != null && !mark.isBlank()) {
+            if (!isBlank(mark)) {
                 marks.add(mark);
             }
         }
@@ -310,17 +364,14 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         if (lineItem == null) {
             return null;
         }
-
         MarkInfo markInfo = lineItem.getMarkInfo();
-        if (markInfo != null && markInfo.getMarkCode() != null && !markInfo.getMarkCode().isBlank()) {
+        if (markInfo != null && !isBlank(markInfo.getMarkCode())) {
             return markInfo.getMarkCode();
         }
-
         String excise = lineItem.getExcise();
-        if (excise != null && !excise.isBlank()) {
+        if (!isBlank(excise)) {
             return excise;
         }
-
         return null;
     }
 
@@ -339,26 +390,33 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         if (errorCode == null || errorCode == ErrorCode.NONE) {
             return backendMessage;
         }
-
-        return switch (errorCode) {
-            case NO_CANDIDATE -> res.getString("sbg.error.no.candidate");
-            case INVALID_MARK_FOR_PRODUCT -> res.getString("sbg.error.invalid.for.product");
-            case ALREADY_RETURNED -> res.getString("sbg.error.already.returned");
-            case SERVICE_UNAVAILABLE -> res.getString("sbg.error.service.unavailable");
-            default -> backendMessage != null ? backendMessage : res.getString("sbg.error.generic");
-        };
+        // Java 8 compatible switch (no arrow syntax)
+        switch (errorCode) {
+            case NO_CANDIDATE:
+                return res.getString("sbg.error.no.candidate");
+            case INVALID_MARK_FOR_PRODUCT:
+                return res.getString("sbg.error.invalid.for.product");
+            case ALREADY_RETURNED:
+                return res.getString("sbg.error.already.returned");
+            case SERVICE_UNAVAILABLE:
+                return res.getString("sbg.error.service.unavailable");
+            default:
+                return backendMessage != null ? backendMessage : res.getString("sbg.error.generic");
+        }
     }
 
     private String buildOperationId(String stage, Receipt receipt, String mark) {
-        int shiftNo = receipt == null ? -1 : receipt.getShiftNo();
-        int receiptNo = receipt == null ? -1 : receipt.getNumber();
-        return stage + "-" + pos.getShopNumber() + "-" + pos.getPOSNumber() + "-" + shiftNo + "-" + receiptNo + "-" + Objects.hashCode(mark);
+        int shiftNo    = receipt == null ? -1 : receipt.getShiftNo();
+        int receiptNo  = receipt == null ? -1 : receipt.getNumber();
+        return stage + "-" + pos.getShopNumber() + "-" + pos.getPOSNumber()
+                + "-" + shiftNo + "-" + receiptNo + "-" + Objects.hashCode(mark);
     }
 
     private String firstNonBlank(String first, String second) {
         return isBlank(first) ? second : first;
     }
 
+    /** Java 8 совместимый isBlank: null или только пробелы → true */
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -368,16 +426,18 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
         if (user == null) {
             return "unknown";
         }
-
-        if (user.getTabNumber() != null && !user.getTabNumber().isBlank()) {
+        if (user.getTabNumber() != null && !isBlank(user.getTabNumber())) {
             return user.getTabNumber();
         }
-
-        String lastName = user.getLastName() == null ? "" : user.getLastName().trim();
-        String firstName = user.getFirstName() == null ? "" : user.getFirstName().trim();
-        String fullName = (lastName + " " + firstName).trim();
-        return fullName.isBlank() ? "unknown" : fullName;
+        String lastName   = user.getLastName()  == null ? "" : user.getLastName().trim();
+        String firstName  = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        String fullName   = (lastName + " " + firstName).trim();
+        return isBlank(fullName) ? "unknown" : fullName;
     }
+
+    // =========================================================================
+    // Inner class
+    // =========================================================================
 
     private static final class ReservationBinding {
         private final String reservationId;
@@ -385,7 +445,7 @@ public class SbgAutoMarkingExciseValidationPlugin implements ExciseValidationPlu
 
         private ReservationBinding(String reservationId, String appliedMark) {
             this.reservationId = reservationId;
-            this.appliedMark = appliedMark;
+            this.appliedMark   = appliedMark;
         }
 
         private String getReservationId() {

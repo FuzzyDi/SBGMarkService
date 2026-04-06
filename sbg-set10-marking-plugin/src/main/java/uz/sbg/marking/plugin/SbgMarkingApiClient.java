@@ -2,56 +2,64 @@ package uz.sbg.marking.plugin;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import uz.sbg.marking.contracts.MarkOperationRequest;
-import uz.sbg.marking.contracts.OperationResponse;
-import uz.sbg.marking.contracts.ResolveAndReserveRequest;
-import uz.sbg.marking.contracts.ResolveAndReserveResponse;
-import uz.sbg.marking.contracts.ReturnResolveAndReserveRequest;
-import uz.sbg.marking.contracts.ReturnResolveAndReserveResponse;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import uz.sbg.marking.plugin.dto.MarkOperationRequest;
+import uz.sbg.marking.plugin.dto.OperationResponse;
+import uz.sbg.marking.plugin.dto.ResolveAndReserveRequest;
+import uz.sbg.marking.plugin.dto.ResolveAndReserveResponse;
+import uz.sbg.marking.plugin.dto.ReturnResolveAndReserveRequest;
+import uz.sbg.marking.plugin.dto.ReturnResolveAndReserveResponse;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 
+/**
+ * HTTP-клиент для backend-сервиса маркировки.
+ * Использует Apache HttpClient 4.5.x (доступен в runtime Set Retail 10).
+ * Java 8 совместим.
+ */
 public class SbgMarkingApiClient {
-    private final HttpClient httpClient;
+
     private final ObjectMapper objectMapper;
     private final String baseUrl;
-    private final Duration requestTimeout;
+    private final int connectTimeoutMs;
+    private final int readTimeoutMs;
 
     public SbgMarkingApiClient(PluginConfig config, ObjectMapper objectMapper) {
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(config.getConnectTimeout())
-                .build();
         this.objectMapper = objectMapper;
         this.baseUrl = config.getBaseUrl();
-        this.requestTimeout = config.getReadTimeout();
+        this.connectTimeoutMs = config.getConnectTimeoutMs();
+        this.readTimeoutMs = config.getReadTimeoutMs();
     }
 
-    public ResolveAndReserveResponse resolveAndReserve(ResolveAndReserveRequest request) throws IOException, InterruptedException {
+    public ResolveAndReserveResponse resolveAndReserve(ResolveAndReserveRequest request) throws IOException {
         return post("/api/v1/marking/resolve-and-reserve", request, ResolveAndReserveResponse.class);
     }
 
-    public ReturnResolveAndReserveResponse returnResolveAndReserve(ReturnResolveAndReserveRequest request) throws IOException, InterruptedException {
+    public ReturnResolveAndReserveResponse returnResolveAndReserve(ReturnResolveAndReserveRequest request) throws IOException {
         return post("/api/v1/marking/return-resolve-and-reserve", request, ReturnResolveAndReserveResponse.class);
     }
 
-    public OperationResponse soldConfirm(MarkOperationRequest request) throws IOException, InterruptedException {
+    public OperationResponse soldConfirm(MarkOperationRequest request) throws IOException {
         return post("/api/v1/marking/sold-confirm", request, OperationResponse.class);
     }
 
-    public OperationResponse saleRelease(MarkOperationRequest request) throws IOException, InterruptedException {
+    public OperationResponse saleRelease(MarkOperationRequest request) throws IOException {
         return post("/api/v1/marking/sale-release", request, OperationResponse.class);
     }
 
-    public OperationResponse returnConfirm(MarkOperationRequest request) throws IOException, InterruptedException {
+    public OperationResponse returnConfirm(MarkOperationRequest request) throws IOException {
         return post("/api/v1/marking/return-confirm", request, OperationResponse.class);
     }
 
-    public OperationResponse returnRelease(MarkOperationRequest request) throws IOException, InterruptedException {
+    public OperationResponse returnRelease(MarkOperationRequest request) throws IOException {
         return post("/api/v1/marking/return-release", request, OperationResponse.class);
     }
 
@@ -63,20 +71,33 @@ public class SbgMarkingApiClient {
         return objectMapper.readValue(payload, type);
     }
 
-    private <T> T post(String path, Object payload, Class<T> responseType) throws IOException, InterruptedException {
+    private <T> T post(String path, Object payload, Class<T> responseType) throws IOException {
+        String url = baseUrl + path;
         String body = objectMapper.writeValueAsString(payload);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
-                .header("Content-Type", "application/json")
-                .timeout(requestTimeout)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
+
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(connectTimeoutMs)
+                .setSocketTimeout(readTimeoutMs)
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("HTTP " + response.statusCode() + " for " + path + ": " + response.body());
-        }
+        try (CloseableHttpClient client = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .build()) {
 
-        return objectMapper.readValue(response.body(), responseType);
+            HttpPost post = new HttpPost(url);
+            post.setEntity(new StringEntity(body, ContentType.APPLICATION_JSON));
+
+            try (CloseableHttpResponse response = client.execute(post)) {
+                int statusCode = response.getStatusLine().getStatusCode();
+                HttpEntity entity = response.getEntity();
+                String responseBody = entity != null ? EntityUtils.toString(entity, "UTF-8") : "";
+
+                if (statusCode < 200 || statusCode >= 300) {
+                    throw new IOException("HTTP " + statusCode + " for " + path + ": " + responseBody);
+                }
+
+                return objectMapper.readValue(responseBody, responseType);
+            }
+        }
     }
 }

@@ -1,13 +1,13 @@
 package uz.sbg.marking.plugin;
 
+import uz.sbg.marking.plugin.dto.MarkOperationRequest;
+
 import java.util.ArrayList;
 import java.util.List;
 
-import uz.sbg.marking.contracts.MarkOperationRequest;
-
 public class PendingOperationsPayload {
     private String endpoint;
-    private List<MarkOperationRequest> requests = new ArrayList<>();
+    private List<MarkOperationRequest> requests = new ArrayList<MarkOperationRequest>();
 
     public String getEndpoint() {
         return endpoint;
