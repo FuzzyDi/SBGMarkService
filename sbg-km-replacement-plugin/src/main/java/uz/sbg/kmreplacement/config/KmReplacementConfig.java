@@ -26,29 +26,47 @@ public final class KmReplacementConfig {
     // Новые опции — специфичны для overlay-функциональности.
     public static final String KEY_QR_TTL_SEC   = "marking.service.qr.ttl.sec";
     public static final String KEY_MAX_ATTEMPTS = "marking.service.max.attempts";
+    /**
+     * true → резолвер {@code StubReplacementResolver} (без сети, для стендовой
+     * проверки UX). false → {@code HttpReplacementResolver} (реальные вызовы
+     * в sbg-marking-server-py). Значение читается как {@code getInt != 0}.
+     */
+    public static final String KEY_STUB_ENABLED = "marking.service.stub.enabled";
 
     public static final String DEFAULT_URL          = "http://localhost:8080";
     public static final int    DEFAULT_CONNECT_MS   = 3000;
     public static final int    DEFAULT_READ_MS      = 5000;
     public static final int    DEFAULT_QR_TTL_SEC   = 60;
     public static final int    DEFAULT_MAX_ATTEMPTS = 2;
+    public static final boolean DEFAULT_STUB_ENABLED = false;
 
-    private final String baseUrl;
-    private final int connectTimeoutMs;
-    private final int readTimeoutMs;
-    private final int qrTtlMs;
-    private final int maxAttempts;
+    private final String  baseUrl;
+    private final int     connectTimeoutMs;
+    private final int     readTimeoutMs;
+    private final int     qrTtlMs;
+    private final int     maxAttempts;
+    private final boolean stubEnabled;
 
     public KmReplacementConfig(String baseUrl,
                                int connectTimeoutMs,
                                int readTimeoutMs,
                                int qrTtlMs,
                                int maxAttempts) {
+        this(baseUrl, connectTimeoutMs, readTimeoutMs, qrTtlMs, maxAttempts, DEFAULT_STUB_ENABLED);
+    }
+
+    public KmReplacementConfig(String baseUrl,
+                               int connectTimeoutMs,
+                               int readTimeoutMs,
+                               int qrTtlMs,
+                               int maxAttempts,
+                               boolean stubEnabled) {
         this.baseUrl = baseUrl;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         this.qrTtlMs = qrTtlMs;
         this.maxAttempts = maxAttempts;
+        this.stubEnabled = stubEnabled;
     }
 
     public static KmReplacementConfig fromProperties(PropertiesReader p) {
@@ -71,14 +89,19 @@ public final class KmReplacementConfig {
         if (ttlSec    < 10)   ttlSec    = DEFAULT_QR_TTL_SEC;
         if (attempts  < 1)    attempts  = DEFAULT_MAX_ATTEMPTS;
 
-        return new KmReplacementConfig(url, connectMs, readMs, ttlSec * 1000, attempts);
+        boolean stub = (p == null)
+                ? DEFAULT_STUB_ENABLED
+                : (p.getInt(KEY_STUB_ENABLED, DEFAULT_STUB_ENABLED ? 1 : 0) != 0);
+
+        return new KmReplacementConfig(url, connectMs, readMs, ttlSec * 1000, attempts, stub);
     }
 
-    public String getBaseUrl()          { return baseUrl; }
-    public int    getConnectTimeoutMs() { return connectTimeoutMs; }
-    public int    getReadTimeoutMs()    { return readTimeoutMs; }
-    public int    getQrTtlMs()          { return qrTtlMs; }
-    public int    getMaxAttempts()      { return maxAttempts; }
+    public String  getBaseUrl()          { return baseUrl; }
+    public int     getConnectTimeoutMs() { return connectTimeoutMs; }
+    public int     getReadTimeoutMs()    { return readTimeoutMs; }
+    public int     getQrTtlMs()          { return qrTtlMs; }
+    public int     getMaxAttempts()      { return maxAttempts; }
+    public boolean isStubEnabled()       { return stubEnabled; }
 
     @Override
     public String toString() {
@@ -86,6 +109,7 @@ public final class KmReplacementConfig {
                 + ", connectTimeoutMs=" + connectTimeoutMs
                 + ", readTimeoutMs=" + readTimeoutMs
                 + ", qrTtlMs=" + qrTtlMs
-                + ", maxAttempts=" + maxAttempts + "}";
+                + ", maxAttempts=" + maxAttempts
+                + ", stubEnabled=" + stubEnabled + "}";
     }
 }

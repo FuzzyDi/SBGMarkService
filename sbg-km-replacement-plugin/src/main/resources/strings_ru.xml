@@ -10,4 +10,5 @@
     <!-- Новые опции для QR overlay. -->
     <entry key="sbg.km.opt.ttl">TTL QR overlay, сек</entry>
     <entry key="sbg.km.opt.attempts">Макс. число попыток замены</entry>
+    <entry key="sbg.km.opt.stub">Stub-резолвер (1 = без сети, для диагностики)</entry>
 </properties>

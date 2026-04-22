@@ -13,12 +13,14 @@ import ru.crystals.pos.spi.plugin.excise.validation.ExciseValidationRequest;
 import ru.crystals.pos.spi.receipt.MarkInfo;
 import ru.crystals.pos.spi.receipt.Receipt;
 import uz.sbg.kmreplacement.config.KmReplacementConfig;
+import uz.sbg.kmreplacement.http.MarkingHttpClient;
 import uz.sbg.kmreplacement.lifecycle.Decision;
 import uz.sbg.kmreplacement.lifecycle.StateMachine;
 import uz.sbg.kmreplacement.overlay.OverlayPlacement;
 import uz.sbg.kmreplacement.overlay.QrOverlayService;
 import uz.sbg.kmreplacement.overlay.QrOverlayWindow;
 import uz.sbg.kmreplacement.overlay.QrPayloadBuilder;
+import uz.sbg.kmreplacement.resolver.HttpReplacementResolver;
 import uz.sbg.kmreplacement.resolver.ReplacementResolver;
 import uz.sbg.kmreplacement.resolver.ResolveContext;
 import uz.sbg.kmreplacement.resolver.StubReplacementResolver;
@@ -105,7 +107,14 @@ public class SbgKmReplacementExcisePlugin implements ExciseValidationPluginExten
             this.config = KmReplacementConfig.fromProperties(
                     properties != null ? properties.getServiceProperties() : null);
 
-            this.resolver  = new StubReplacementResolver();   // MVP: stub, без сети
+            if (config.isStubEnabled()) {
+                this.resolver = new StubReplacementResolver();
+                if (log != null) log.info("[{}] resolver = STUB (no network)", TAG);
+            } else {
+                MarkingHttpClient httpClient = new MarkingHttpClient(config);
+                this.resolver = new HttpReplacementResolver(httpClient);
+                if (log != null) log.info("[{}] resolver = HTTP | baseUrl={}", TAG, config.getBaseUrl());
+            }
             this.stateRepo = new InMemoryReplacementStateRepository();
             this.overlay   = new QrOverlayService();
             this.scheduler = new ExpirationScheduler(stateRepo, overlay);

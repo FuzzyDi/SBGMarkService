@@ -24,6 +24,8 @@
             <!-- Новые опции для QR overlay. -->
             <Integer key="marking.service.qr.ttl.sec"         localeKey="sbg.km.opt.ttl"             minValue="10"   maxValue="600"/>
             <Integer key="marking.service.max.attempts"       localeKey="sbg.km.opt.attempts"        minValue="1"    maxValue="5"/>
+            <!-- 0 = HTTP-резолвер (прод), 1 = stub-резолвер без сети (для стендовой диагностики). -->
+            <Integer key="marking.service.stub.enabled"       localeKey="sbg.km.opt.stub"            minValue="0"    maxValue="1"/>
         </Options>
 
         <ExciseValidationPlugin id="sbg.marking.auto.plugin" localeKey="sbg.plugin.name">
