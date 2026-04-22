@@ -127,7 +127,7 @@ public class SbgKmReplacementExcisePlugin implements ExciseValidationPluginExten
             }
             this.stateRepo = new InMemoryReplacementStateRepository();
             this.overlay   = new QrOverlayService();
-            this.scheduler = new ExpirationScheduler(stateRepo, overlay);
+            this.scheduler = new ExpirationScheduler(stateRepo, overlay, httpClient);
             this.scheduler.start();
 
             this.stateMachine = new StateMachine(resolver, stateRepo, config, new StateMachine.Clock() {
