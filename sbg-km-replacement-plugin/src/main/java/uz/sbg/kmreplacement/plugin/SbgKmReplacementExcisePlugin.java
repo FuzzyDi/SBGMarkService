@@ -243,10 +243,10 @@ public class SbgKmReplacementExcisePlugin implements ExciseValidationPluginExten
         log.info("[{}] decision | key={} | {}", TAG, key, decision);
 
         if (decision.shouldShowOverlay()) {
-            showOverlay(key, decision.getReplacementKm());
+            showOverlay(decision.getCorrelationKey(), decision.getAttemptIndex(), decision.getReplacementKm());
         }
         if (decision.shouldCloseOverlay()) {
-            overlay.hide(key);
+            overlay.hide(decision.getCorrelationKey(), decision.getAttemptIndex());
         }
 
         if (decision.isAccept()) {
@@ -260,16 +260,18 @@ public class SbgKmReplacementExcisePlugin implements ExciseValidationPluginExten
         return new ExciseValidationResponse(false, msg, false);
     }
 
-    private void showOverlay(CorrelationKey key, String replacementKm) {
+    private void showOverlay(CorrelationKey key, int attemptIndex, String replacementKm) {
         try {
             BufferedImage qr = QrPayloadBuilder.build(replacementKm, QrOverlayWindow.QR_PX);
             String title = "ЗАМЕНА КМ";
             String subtitle = "Сканируйте QR как новый КМ";
-            overlay.show(key, qr, title, subtitle);
+            overlay.show(key, attemptIndex, qr, title, subtitle);
             // позиция берётся внутри окна (OverlayPlacement); место — правый верхний угол.
-            log.info("[{}] overlay show | key={} | screen={}", TAG, key, OverlayPlacement.screenBounds());
+            log.info("[{}] overlay show | key={}#{} | screen={}",
+                    TAG, key, attemptIndex, OverlayPlacement.screenBounds());
         } catch (Throwable t) {
-            log.error("[{}] overlay show FAILED | key={} | error={}", TAG, key, t.getMessage(), t);
+            log.error("[{}] overlay show FAILED | key={}#{} | error={}",
+                    TAG, key, attemptIndex, t.getMessage(), t);
         }
     }
 

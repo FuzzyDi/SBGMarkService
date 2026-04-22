@@ -11,57 +11,65 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Фасад для работы с overlay-окнами. По одному окну на
- * {@link CorrelationKey}. Потокобезопасен.
+ * Фасад для работы с overlay-окнами. По одному окну на пару
+ * {@link CorrelationKey} + {@code attemptIndex}. Потокобезопасен.
  *
- * <p>Решение "одно окно на correlationKey" важно: в чеке может быть
- * несколько товаров с КМ, и по каждому может висеть своя замена. Но на
- * практике одновременно их почти никогда не бывает, т.к. кассир обычно
- * разбирается с одним КМ до следующего.</p>
+ * <p>Разные {@code attemptIndex} в пределах одного базового ключа — это
+ * разные позиции в чеке (например, 4 одинаковых кока-колы, каждая со своим
+ * индивидуальным КМ). Для каждой позиции, требующей замены, поднимается
+ * отдельное окно.</p>
  *
- * <p>Если одновременно активны несколько окон — мы не делаем
- * специального позиционирования (все показываются в одной точке, один
- * поверх другого). На MVP этого достаточно. Улучшение — см. R5 в
- * проектном документе (очередь показа или раскладка стэком).</p>
+ * <p>Если одновременно активны несколько окон — специального позиционирования
+ * не делаем (все в одной точке, одно поверх другого). На MVP достаточно.</p>
  */
 public final class QrOverlayService {
 
     private static final Logger log = LoggerFactory.getLogger(QrOverlayService.class);
 
-    private final Map<CorrelationKey, QrOverlayWindow> windows =
-            new ConcurrentHashMap<CorrelationKey, QrOverlayWindow>();
+    private final Map<String, QrOverlayWindow> windows =
+            new ConcurrentHashMap<String, QrOverlayWindow>();
 
-    public void show(CorrelationKey key, BufferedImage qr, String title, String subtitle) {
+    private static String mkKey(CorrelationKey key, int attemptIndex) {
+        return (key == null ? "-" : key.asString()) + "#" + attemptIndex;
+    }
+
+    public void show(CorrelationKey key, int attemptIndex, BufferedImage qr, String title, String subtitle) {
         if (key == null) return;
-        QrOverlayWindow w = windows.get(key);
+        String mk = mkKey(key, attemptIndex);
+        QrOverlayWindow w = windows.get(mk);
         if (w == null) {
             w = new QrOverlayWindow();
-            QrOverlayWindow prev = windows.putIfAbsent(key, w);
+            QrOverlayWindow prev = windows.putIfAbsent(mk, w);
             if (prev != null) w = prev;
         }
         w.show(qr, title, subtitle);
-        log.info("[SBG-KMR] overlay SHOW requested | key={}", key);
+        log.info("[SBG-KMR] overlay SHOW requested | key={}", mk);
     }
 
-    public void hide(CorrelationKey key) {
+    public void hide(CorrelationKey key, int attemptIndex) {
         if (key == null) return;
-        QrOverlayWindow w = windows.remove(key);
+        String mk = mkKey(key, attemptIndex);
+        QrOverlayWindow w = windows.remove(mk);
         if (w != null) {
             w.hide();
-            log.info("[SBG-KMR] overlay HIDE requested | key={}", key);
+            log.info("[SBG-KMR] overlay HIDE requested | key={}", mk);
         }
     }
 
-    public boolean isShown(CorrelationKey key) {
+    public boolean isShown(CorrelationKey key, int attemptIndex) {
         if (key == null) return false;
-        QrOverlayWindow w = windows.get(key);
+        QrOverlayWindow w = windows.get(mkKey(key, attemptIndex));
         return w != null && w.isShown();
     }
 
     public void hideAll() {
-        List<CorrelationKey> keys = new ArrayList<CorrelationKey>(windows.keySet());
-        for (CorrelationKey k : keys) {
-            hide(k);
+        List<String> keys = new ArrayList<String>(windows.keySet());
+        for (String mk : keys) {
+            QrOverlayWindow w = windows.remove(mk);
+            if (w != null) {
+                w.hide();
+                log.info("[SBG-KMR] overlay HIDE requested | key={}", mk);
+            }
         }
     }
 

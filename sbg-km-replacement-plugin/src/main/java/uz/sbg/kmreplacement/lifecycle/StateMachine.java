@@ -11,6 +11,8 @@ import uz.sbg.kmreplacement.state.ReplacementState;
 import uz.sbg.kmreplacement.state.ReplacementStateRepository;
 import uz.sbg.kmreplacement.state.Status;
 
+import java.util.List;
+
 /**
  * Чистая логика state machine — без Swing, без HTTP, без SR10 API.
  * Легко покрывается unit-тестами.
@@ -18,30 +20,23 @@ import uz.sbg.kmreplacement.state.Status;
  * <p>Все зависимости передаются в конструктор. {@link Clock} — абстракция
  * над временем, чтобы тесты могли подменять now().</p>
  *
- * <p>Правила (см. раздел §4 проектного документа):</p>
- * <ol>
- *   <li>scanned KM валиден:
- *     <ul>
- *       <li>если есть активная запись QR_SHOWN и scanned == replacement →
- *           ACCEPT_CLOSE_OVERLAY + status=REPLACEMENT_ACCEPTED;</li>
- *       <li>иначе → ACCEPT (оверлей не трогаем, если вдруг есть).</li>
- *     </ul></li>
- *   <li>scanned KM невалиден:
- *     <ul>
- *       <li>если уже есть активная запись QR_SHOWN по этому ключу и
- *           scanned != replacement — ожидается, что кассир пока не отсканировал
- *           QR. Оверлей оставляем как есть, возвращаем REJECT;</li>
- *       <li>если есть активная запись и scanned == replacement —
- *           странная гонка (B считался валидным, но стал невалидным):
- *           status=FAILED, overlay HIDE, REJECT;</li>
- *       <li>если превышен maxAttempts — REJECT без overlay;</li>
- *       <li>иначе ищем замену: resolver.resolve() → REPLACE_WITH(B) →
- *           создаём/обновляем запись QR_SHOWN, возвращаем REJECT с
- *           указанием показать overlay(B);</li>
- *       <li>resolver.ERROR или UNAVAILABLE — REJECT без overlay с
- *           соответствующим сообщением.</li>
- *     </ul></li>
- * </ol>
+ * <h3>Multi-position (несколько одинаковых товаров в одном чеке)</h3>
+ * <p>В пределах одного {@link CorrelationKey} (shop|pos|receipt|gtin) может
+ * быть несколько активных/терминальных записей — по одной на каждую
+ * позицию-попытку замены (см. {@code ReplacementState.attemptIndex}).
+ * Например, 4 одинаковых кока-колы с 4 разными невалидными КМ → 4 записи с
+ * {@code attemptIndex = 1,2,3,4}. Идентификация "какую запись закрывать на
+ * скан B" выполняется по содержимому КМ:</p>
+ * <ul>
+ *   <li>Скан валидного КМ → ищем {@code findQrShownByReplacement(scanned)}.
+ *       Если нашли — это и есть та самая позиция, закрываем её оверлей.
+ *       Если не нашли — обычный ACCEPT (ничей оверлей не трогаем).</li>
+ *   <li>Скан невалидного КМ, для которого резолвер предложил замену → сначала
+ *       проверяем, не лежит ли он уже в QR_SHOWN с тем же {@code originalKm}
+ *       в пределах базового ключа ({@code findQrShownByOriginalInBase}); если
+ *       да — идемпотентно показываем тот же overlay. Иначе выделяем новый
+ *       {@code attemptIndex} и создаём новую запись.</li>
+ * </ul>
  */
 public final class StateMachine {
 
@@ -71,14 +66,14 @@ public final class StateMachine {
                            ResolveContext ctx,
                            int receiptNumber) {
         long now = clock.nowMs();
-        ReplacementState st = repo.find(key);
 
-        // Сбросить устаревшую QR_SHOWN запись, прежде чем принимать решение.
-        if (st != null && st.getStatus() == Status.QR_SHOWN && st.isExpired(now)) {
-            log.info("[SBG-KMR-SM] state EXPIRED | key={}", key);
-            st.setStatus(Status.EXPIRED);
-            repo.save(st);
-            st = null;   // дальше считаем, как будто записи не было
+        // Сбросить устаревшие QR_SHOWN записи для этого базового ключа до принятия решения.
+        for (ReplacementState s : repo.findAll(key)) {
+            if (s.getStatus() == Status.QR_SHOWN && s.isExpired(now)) {
+                log.info("[SBG-KMR-SM] state EXPIRED pre-scan | {}", s);
+                s.setStatus(Status.EXPIRED);
+                repo.save(s);
+            }
         }
 
         ResolveOutcome outcome = resolver.resolve(scannedKm, ctx);
@@ -87,9 +82,9 @@ public final class StateMachine {
 
         switch (outcome.getKind()) {
             case VALID:
-                return onValid(scannedKm, key, st, now);
+                return onValid(scannedKm, key, now);
             case REPLACE_WITH:
-                return onNeedReplacement(scannedKm, key, ctx, st, outcome.getReplacementKm(), now, receiptNumber);
+                return onNeedReplacement(scannedKm, key, ctx, outcome.getReplacementKm(), now, receiptNumber);
             case UNAVAILABLE:
                 return onUnavailable(key, outcome.getMessage());
             case ERROR:
@@ -102,30 +97,30 @@ public final class StateMachine {
     // Ветки
     // =========================================================================
 
-    private Decision onValid(String scannedKm, CorrelationKey key, ReplacementState st, long now) {
-        if (st != null && st.getStatus() == Status.QR_SHOWN && scannedKm.equals(st.getReplacementKm())) {
-            // Кассир отсканировал ожидаемый B — закрываем overlay и фиксируем успех.
-            st.setStatus(Status.REPLACEMENT_ACCEPTED);
-            st.setExpiresAtMs(now + 5L * 60_000L);   // продлеваем на 5 мин для диагностики
-            repo.save(st);
-            log.info("[SBG-KMR-SM] ACCEPT close overlay | key={} | scanned==replacement", key);
-            return Decision.acceptCloseOverlay(key);
+    private Decision onValid(String scannedKm, CorrelationKey key, long now) {
+        // 1) Глобальный поиск: если scanned совпадает с замещающим КМ какой-то
+        //    активной QR_SHOWN записи (в любом чеке/товаре) — закрываем её overlay.
+        //    Обычно такое совпадение происходит для той же позиции, где ожидалась
+        //    замена. Использование глобального поиска даёт корректность даже в
+        //    случае, если SR10 по какой-то причине вызвал нас с другим базовым ключом.
+        ReplacementState targeted = repo.findQrShownByReplacement(scannedKm);
+        if (targeted != null) {
+            targeted.setStatus(Status.REPLACEMENT_ACCEPTED);
+            targeted.setExpiresAtMs(now + 5L * 60_000L);   // продлеваем на 5 мин для диагностики
+            repo.save(targeted);
+            log.info("[SBG-KMR-SM] ACCEPT close overlay | {} | scanned==replacement", targeted);
+            return Decision.acceptCloseOverlay(targeted.getCorrelationKey(), targeted.getAttemptIndex());
         }
-        // Любой другой валидный скан: если висит overlay по этому товару, тоже гасим —
-        // товар продан, замена уже не актуальна.
-        if (st != null && st.getStatus() == Status.QR_SHOWN) {
-            st.setStatus(Status.REPLACEMENT_ACCEPTED);
-            repo.save(st);
-            log.info("[SBG-KMR-SM] ACCEPT close overlay | key={} | different KM accepted", key);
-            return Decision.acceptCloseOverlay(key);
-        }
+
+        // 2) Обычный ACCEPT: никакой активной замены для этого КМ нет.
+        //    Специально НЕ гасим чужие overlay'ы по базовому ключу: они могут быть
+        //    валидны для других позиций того же товара в чеке.
         return Decision.accept(key);
     }
 
     private Decision onNeedReplacement(String scannedKm,
                                        CorrelationKey key,
                                        ResolveContext ctx,
-                                       ReplacementState st,
                                        String proposedReplacement,
                                        long now,
                                        int receiptNumber) {
@@ -136,38 +131,26 @@ public final class StateMachine {
             return Decision.reject(key, "Internal: resolver proposed invalid replacement");
         }
 
-        // Ситуация: активная запись уже есть по этому ключу.
-        if (st != null) {
-            if (st.getStatus() == Status.QR_SHOWN && scannedKm.equals(st.getReplacementKm())) {
-                // Скан == ожидаемого B, но B оказался невалидным → гонка / смена состояния в БД.
-                st.setStatus(Status.FAILED);
-                st.setLastRejectReason("replacement_no_longer_valid");
-                repo.save(st);
-                log.warn("[SBG-KMR-SM] FAILED: B became invalid | key={}", key);
-                return Decision.reject(key, "Предложенная замена больше не действительна");
-            }
-            // Анти-цикл: исчерпали попытки — FAILED вне зависимости от текущего статуса.
-            if (st.getAttemptCount() >= config.getMaxAttempts()) {
-                st.setStatus(Status.FAILED);
-                st.setLastRejectReason("max_attempts_exceeded");
-                repo.save(st);
-                log.warn("[SBG-KMR-SM] FAILED: attempts exceeded | key={} | attempts={}",
-                        key, st.getAttemptCount());
-                return Decision.reject(key, "Превышено число попыток замены КМ");
-            }
-            if (st.getStatus() == Status.QR_SHOWN) {
-                // Кассир сканирует НОВЫЙ A при уже висящем оверлее — overlay не трогаем,
-                // пусть кассир всё-таки отсканирует ожидаемый B.
-                log.info("[SBG-KMR-SM] REJECT keep overlay | key={} | overlay already shown", key);
-                return Decision.reject(key, "Отсканируйте предложенный заменяющий КМ");
-            }
-            // Терминальная запись по тому же ключу (EXPIRED/FAILED/ACCEPTED) — даём ещё одну попытку.
+        // Идемпотентный повторный скан того же "плохого" КМ: если для этого
+        // originalKm уже есть активный QR_SHOWN в пределах базового ключа —
+        // просто показываем тот же overlay ещё раз (index/replacement не меняем).
+        ReplacementState existing = repo.findQrShownByOriginalInBase(key, scannedKm);
+        if (existing != null) {
+            log.info("[SBG-KMR-SM] REJECT keep overlay (idempotent rescan) | {}", existing);
+            return Decision.rejectShowOverlay(
+                    existing.getCorrelationKey(),
+                    existing.getAttemptIndex(),
+                    "Отсканируйте предложенный заменяющий КМ",
+                    existing.getReplacementKm());
         }
 
-        // Создаём / обновляем запись QR_SHOWN.
-        int attempts = (st != null) ? st.getAttemptCount() + 1 : 1;
+        // Новая позиция (новая попытка замены) — выделяем следующий attemptIndex.
+        // Индекс — max(существующих) + 1, чтобы не пересечься с терминальными.
+        int nextIndex = nextAttemptIndex(key);
+
         ReplacementState fresh = new ReplacementState(
                 key,
+                nextIndex,
                 scannedKm,
                 proposedReplacement,
                 ctx != null ? ctx.getBarcode() : null,
@@ -175,13 +158,14 @@ public final class StateMachine {
                 Status.QR_SHOWN,
                 now,
                 now + config.getQrTtlMs(),
-                attempts,
+                1,
                 receiptNumber
         );
         repo.save(fresh);
-        log.info("[SBG-KMR-SM] REJECT show overlay | key={} | attempts={} | ttl={}ms",
-                key, attempts, config.getQrTtlMs());
-        return Decision.rejectShowOverlay(key,
+        log.info("[SBG-KMR-SM] REJECT show overlay | {} | ttl={}ms", fresh, config.getQrTtlMs());
+        return Decision.rejectShowOverlay(
+                key,
+                nextIndex,
                 "КМ не найден. Отсканируйте заменяющий КМ с экрана кассы.",
                 proposedReplacement);
     }
@@ -195,6 +179,15 @@ public final class StateMachine {
         log.error("[SBG-KMR-SM] REJECT resolver error | key={} | msg='{}'", key, message);
         return Decision.reject(key,
                 "Сервис маркировки временно недоступен" + (message != null ? " (" + message + ")" : ""));
+    }
+
+    private int nextAttemptIndex(CorrelationKey key) {
+        List<ReplacementState> all = repo.findAll(key);
+        int max = 0;
+        for (ReplacementState s : all) {
+            if (s.getAttemptIndex() > max) max = s.getAttemptIndex();
+        }
+        return max + 1;
     }
 
     private static String abbreviate(String km) {

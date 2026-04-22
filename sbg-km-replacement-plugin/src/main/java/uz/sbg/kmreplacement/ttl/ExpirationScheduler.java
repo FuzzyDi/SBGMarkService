@@ -67,12 +67,12 @@ public final class ExpirationScheduler {
             for (ReplacementState s : expired) {
                 s.setStatus(Status.EXPIRED);
                 repo.save(s);
-                overlay.hide(s.getCorrelationKey());
-                log.info("[SBG-KMR-TTL] overlay EXPIRED | key={}", s.getCorrelationKey());
+                overlay.hide(s.getCorrelationKey(), s.getAttemptIndex());
+                log.info("[SBG-KMR-TTL] overlay EXPIRED | {}", s);
             }
             List<ReplacementState> old = repo.findTerminalOlderThan(now - TERMINAL_RETENTION_MS);
             for (ReplacementState s : old) {
-                repo.remove(s.getCorrelationKey());
+                repo.remove(s.getCorrelationKey(), s.getAttemptIndex());
             }
         } catch (Throwable t) {
             log.error("[SBG-KMR-TTL] tick failed: {}", t.getMessage(), t);
