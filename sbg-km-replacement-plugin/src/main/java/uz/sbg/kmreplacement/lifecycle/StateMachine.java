@@ -135,6 +135,15 @@ public final class StateMachine {
                                        long now,
                                        int receiptNumber) {
 
+        // Если автоподмена выключена настройкой — плагин работает как обычный
+        // валидатор: никаких overlay, никакого state/резерва. Резерв, который
+        // backend мог предварительно создать под REPLACE_WITH, отпустится его
+        // собственным TTL — плагин не держит его rid у себя.
+        if (!config.isReplacementEnabled()) {
+            log.info("[SBG-KMR-SM] REJECT (replacement disabled) | key={} | rid={}", key, reservationId);
+            return Decision.reject(key, "КМ не валиден");
+        }
+
         // Дефенс: resolver вернул REPLACE_WITH, но предложил тот же КМ → считаем ошибкой.
         if (proposedReplacement == null || proposedReplacement.isEmpty() || proposedReplacement.equals(scannedKm)) {
             log.warn("[SBG-KMR-SM] resolver returned invalid REPLACE_WITH | key={} | same/empty", key);

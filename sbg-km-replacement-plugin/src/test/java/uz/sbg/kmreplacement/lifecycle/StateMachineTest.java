@@ -272,6 +272,42 @@ public class StateMachineTest {
     }
 
     // ---------------------------------------------------------------
+    // replacement.enabled=false → плагин как обычный валидатор:
+    // REPLACE_WITH от резолвера понижается до REJECT без overlay и без state.
+    // ---------------------------------------------------------------
+    @Test
+    public void replacementDisabled_replaceWithDowngradedToPlainReject() {
+        // Пересобираем SM с disabled-режимом.
+        config = new KmReplacementConfig("http://x", 3000, 5000, 60_000, 2, false, false);
+        sm = new StateMachine(resolver, repo, config, clock);
+
+        CorrelationKey key = CorrelationKey.of(SHOP, POS, RECEIPT, GTIN);
+        resolver.enqueue(ResolveOutcome.replaceWith(KM_B));
+        Decision d = sm.onScan(KM_A, key, ctx(), RECEIPT_NUM);
+
+        assertEquals(DecisionKind.REJECT, d.getKind());
+        assertFalse("overlay must not be shown in validator mode", d.shouldShowOverlay());
+        assertNull(d.getReplacementKm());
+        assertTrue("no state must be persisted in validator mode", repo.findAll(key).isEmpty());
+    }
+
+    // ---------------------------------------------------------------
+    // replacement.enabled=false, но KM валиден → обычный ACCEPT.
+    // ---------------------------------------------------------------
+    @Test
+    public void replacementDisabled_validKmStillAccepted() {
+        config = new KmReplacementConfig("http://x", 3000, 5000, 60_000, 2, false, false);
+        sm = new StateMachine(resolver, repo, config, clock);
+
+        CorrelationKey key = CorrelationKey.of(SHOP, POS, RECEIPT, GTIN);
+        resolver.enqueue(ResolveOutcome.valid());
+        Decision d = sm.onScan(KM_A, key, ctx(), RECEIPT_NUM);
+
+        assertEquals(DecisionKind.ACCEPT, d.getKind());
+        assertTrue(repo.findAll(key).isEmpty());
+    }
+
+    // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
     private ResolveContext ctx() {

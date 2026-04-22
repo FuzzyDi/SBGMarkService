@@ -9,4 +9,5 @@
     <entry key="sbg.km.opt.ttl">QR overlay TTL, sec</entry>
     <entry key="sbg.km.opt.attempts">Max replacement attempts</entry>
     <entry key="sbg.km.opt.stub">Stub resolver (1 = offline, diagnostics)</entry>
+    <entry key="sbg.km.opt.replacement">Auto KM replacement (1 = with overlay, 0 = validation only)</entry>
 </properties>

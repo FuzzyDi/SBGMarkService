@@ -32,13 +32,23 @@ public final class KmReplacementConfig {
      * в sbg-marking-server-py). Значение читается как {@code getInt != 0}.
      */
     public static final String KEY_STUB_ENABLED = "marking.service.stub.enabled";
+    /**
+     * true → режим автоподмены КМ с QR overlay (полный сценарий плагина).
+     * false → плагин работает как обычный валидатор маркировки: КМ всё равно
+     * проверяется на backend, но ветка {@code REPLACE_WITH} понижается до
+     * REJECT без показа overlay и без создания state/резерва на стороне
+     * плагина. Полезно для магазинов без FIFO-пула или для временного
+     * отключения автоподмены без переразвёртывания.
+     */
+    public static final String KEY_REPLACEMENT_ENABLED = "marking.service.replacement.enabled";
 
     public static final String DEFAULT_URL          = "http://localhost:8080";
     public static final int    DEFAULT_CONNECT_MS   = 3000;
     public static final int    DEFAULT_READ_MS      = 5000;
     public static final int    DEFAULT_QR_TTL_SEC   = 60;
     public static final int    DEFAULT_MAX_ATTEMPTS = 2;
-    public static final boolean DEFAULT_STUB_ENABLED = false;
+    public static final boolean DEFAULT_STUB_ENABLED        = false;
+    public static final boolean DEFAULT_REPLACEMENT_ENABLED = true;
 
     private final String  baseUrl;
     private final int     connectTimeoutMs;
@@ -46,13 +56,15 @@ public final class KmReplacementConfig {
     private final int     qrTtlMs;
     private final int     maxAttempts;
     private final boolean stubEnabled;
+    private final boolean replacementEnabled;
 
     public KmReplacementConfig(String baseUrl,
                                int connectTimeoutMs,
                                int readTimeoutMs,
                                int qrTtlMs,
                                int maxAttempts) {
-        this(baseUrl, connectTimeoutMs, readTimeoutMs, qrTtlMs, maxAttempts, DEFAULT_STUB_ENABLED);
+        this(baseUrl, connectTimeoutMs, readTimeoutMs, qrTtlMs, maxAttempts,
+                DEFAULT_STUB_ENABLED, DEFAULT_REPLACEMENT_ENABLED);
     }
 
     public KmReplacementConfig(String baseUrl,
@@ -61,12 +73,24 @@ public final class KmReplacementConfig {
                                int qrTtlMs,
                                int maxAttempts,
                                boolean stubEnabled) {
+        this(baseUrl, connectTimeoutMs, readTimeoutMs, qrTtlMs, maxAttempts,
+                stubEnabled, DEFAULT_REPLACEMENT_ENABLED);
+    }
+
+    public KmReplacementConfig(String baseUrl,
+                               int connectTimeoutMs,
+                               int readTimeoutMs,
+                               int qrTtlMs,
+                               int maxAttempts,
+                               boolean stubEnabled,
+                               boolean replacementEnabled) {
         this.baseUrl = baseUrl;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         this.qrTtlMs = qrTtlMs;
         this.maxAttempts = maxAttempts;
         this.stubEnabled = stubEnabled;
+        this.replacementEnabled = replacementEnabled;
     }
 
     public static KmReplacementConfig fromProperties(PropertiesReader p) {
@@ -93,7 +117,11 @@ public final class KmReplacementConfig {
                 ? DEFAULT_STUB_ENABLED
                 : (p.getInt(KEY_STUB_ENABLED, DEFAULT_STUB_ENABLED ? 1 : 0) != 0);
 
-        return new KmReplacementConfig(url, connectMs, readMs, ttlSec * 1000, attempts, stub);
+        boolean replacement = (p == null)
+                ? DEFAULT_REPLACEMENT_ENABLED
+                : (p.getInt(KEY_REPLACEMENT_ENABLED, DEFAULT_REPLACEMENT_ENABLED ? 1 : 0) != 0);
+
+        return new KmReplacementConfig(url, connectMs, readMs, ttlSec * 1000, attempts, stub, replacement);
     }
 
     public String  getBaseUrl()          { return baseUrl; }
@@ -101,7 +129,8 @@ public final class KmReplacementConfig {
     public int     getReadTimeoutMs()    { return readTimeoutMs; }
     public int     getQrTtlMs()          { return qrTtlMs; }
     public int     getMaxAttempts()      { return maxAttempts; }
-    public boolean isStubEnabled()       { return stubEnabled; }
+    public boolean isStubEnabled()        { return stubEnabled; }
+    public boolean isReplacementEnabled() { return replacementEnabled; }
 
     @Override
     public String toString() {
@@ -110,6 +139,7 @@ public final class KmReplacementConfig {
                 + ", readTimeoutMs=" + readTimeoutMs
                 + ", qrTtlMs=" + qrTtlMs
                 + ", maxAttempts=" + maxAttempts
-                + ", stubEnabled=" + stubEnabled + "}";
+                + ", stubEnabled=" + stubEnabled
+                + ", replacementEnabled=" + replacementEnabled + "}";
     }
 }
