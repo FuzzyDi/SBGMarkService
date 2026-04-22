@@ -13,6 +13,7 @@
         <module>sbg-marking-contracts</module>
         <module>sbg-marking-server</module>
         <module>sbg-set10-marking-plugin</module>
+        <module>sbg-km-replacement-plugin</module>
     </modules>
 
     <properties>

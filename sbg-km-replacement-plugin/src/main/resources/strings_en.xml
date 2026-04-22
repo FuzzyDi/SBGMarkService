@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <entry key="sbg.service.name">SBG: Auto marking (FIFO)</entry>
+    <entry key="sbg.plugin.name">SBG: Auto marking — validation plugin</entry>
+    <entry key="sbg.option.url">Marking service URL</entry>
+    <entry key="sbg.option.connect.timeout">Connect timeout, ms</entry>
+    <entry key="sbg.option.read.timeout">Read timeout, ms</entry>
+    <entry key="sbg.km.opt.ttl">QR overlay TTL, sec</entry>
+    <entry key="sbg.km.opt.attempts">Max replacement attempts</entry>
+</properties>

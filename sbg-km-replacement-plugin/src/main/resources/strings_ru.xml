@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <!-- Лицензионные ключи названий — совпадают со старым плагином. -->
+    <entry key="sbg.service.name">SBG: Автоматическая маркировка (FIFO)</entry>
+    <entry key="sbg.plugin.name">SBG: Автоматическая маркировка — плагин</entry>
+    <entry key="sbg.option.url">URL сервиса КМ</entry>
+    <entry key="sbg.option.connect.timeout">Таймаут подключения, мс</entry>
+    <entry key="sbg.option.read.timeout">Таймаут чтения, мс</entry>
+    <!-- Новые опции для QR overlay. -->
+    <entry key="sbg.km.opt.ttl">TTL QR overlay, сек</entry>
+    <entry key="sbg.km.opt.attempts">Макс. число попыток замены</entry>
+</properties>

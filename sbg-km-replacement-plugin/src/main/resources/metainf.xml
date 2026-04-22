@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SetIntegration set10-api-version="1.23.0"
+                version="1.0.0"
+                xmlns="http://crystals.ru/set10/api/metainf"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="http://crystals.ru/set10/api/metainf metainf.xsd">
+
+    <!--
+      SBG KM Replacement — MVP с QR overlay на основном экране кассира.
+
+      ВАЖНО: id сервиса, id плагина и localeKey совпадают с лицензионным
+      sbg-set10-marking-plugin (см. CLAUDE.md). Менять их нельзя — на них
+      распространяется действующая лицензия Set Retail 10. Новый jar
+      выступает полной заменой старого (deploy только один из двух).
+    -->
+    <ExternalService serviceType="EXCISE_VALIDATION"
+                     localeKey="sbg.service.name"
+                     id="sbg.marking.external.service">
+        <Options>
+            <!-- Лицензионные ключи — совпадают со старым плагином. -->
+            <URL     key="marking.service.url"                localeKey="sbg.option.url"/>
+            <Integer key="marking.service.connect.timeout.ms" localeKey="sbg.option.connect.timeout" minValue="100"  maxValue="180000"/>
+            <Integer key="marking.service.read.timeout.ms"    localeKey="sbg.option.read.timeout"    minValue="100"  maxValue="180000"/>
+            <!-- Новые опции для QR overlay. -->
+            <Integer key="marking.service.qr.ttl.sec"         localeKey="sbg.km.opt.ttl"             minValue="10"   maxValue="600"/>
+            <Integer key="marking.service.max.attempts"       localeKey="sbg.km.opt.attempts"        minValue="1"    maxValue="5"/>
+        </Options>
+
+        <ExciseValidationPlugin id="sbg.marking.auto.plugin" localeKey="sbg.plugin.name">
+            <Description>SBG auto marking with cashier-side QR overlay (MVP, stub resolver)</Description>
+            <ProductTypes>DRUGS</ProductTypes>
+            <ProductTypes>WATER_AND_BEVERAGES</ProductTypes>
+            <ProductTypes>SPIRITS</ProductTypes>
+            <ProductTypes>TOBACCO</ProductTypes>
+            <ProductTypes>BEER</ProductTypes>
+        </ExciseValidationPlugin>
+    </ExternalService>
+</SetIntegration>

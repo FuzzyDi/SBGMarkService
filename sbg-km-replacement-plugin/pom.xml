@@ -1,0 +1,159 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>uz.sbg.marking</groupId>
+        <artifactId>sbg-marking-auto-km</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>sbg-km-replacement-plugin</artifactId>
+    <name>sbg-km-replacement-plugin</name>
+    <description>SBG KM replacement with cashier-side QR overlay</description>
+
+    <properties>
+        <!-- POS runtime requires Java 8 bytecode. Override parent Java 17. -->
+        <maven.compiler.release>8</maven.compiler.release>
+        <zxing.version>3.5.3</zxing.version>
+    </properties>
+
+    <dependencies>
+        <!-- Set Retail 10 API — provided by POS runtime -->
+        <dependency>
+            <groupId>ru.crystals</groupId>
+            <artifactId>set10pos-api</artifactId>
+            <version>0.0.0_DO_NOT_CHANGE_VERSION-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Jackson — provided by SR10 runtime -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Apache HttpClient 4.5.x — provided by SR10 runtime -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.2</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- SLF4J — provided by POS runtime -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.25</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- javax.annotation (@PostConstruct) — provided by POS runtime -->
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!--
+            ZXing для генерации QR. В рантайме SR10 его нет, значит
+            обязан попасть в наш jar через maven-shade-plugin.
+            Version 3.5.3 — Java 8 совместима (core + javase).
+        -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+
+        <!-- Тесты -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- XSD-валидация metainf.xml -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>xml-maven-plugin</artifactId>
+                <version>1.1.0</version>
+                <executions>
+                    <execution>
+                        <id>validate-metainf</id>
+                        <phase>validate</phase>
+                        <goals><goal>validate</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <validationSets>
+                        <validationSet>
+                            <dir>${project.basedir}/src/main/resources</dir>
+                            <includes><include>metainf.xml</include></includes>
+                            <systemId>${project.basedir}/src/main/xsd/metainf.xsd</systemId>
+                        </validationSet>
+                    </validationSets>
+                </configuration>
+            </plugin>
+
+            <!--
+                Shade ZXing в итоговый jar, т.к. он не provided.
+                Перепаковываем пакеты com.google.zxing -> uz.sbg.kmreplacement.shaded.zxing
+                чтобы исключить любой конфликт с другими плагинами SR10,
+                которые вдруг тоже захотят ZXing другой версии.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <minimizeJar>true</minimizeJar>
+                            <artifactSet>
+                                <includes>
+                                    <include>com.google.zxing:core</include>
+                                    <include>com.google.zxing:javase</include>
+                                </includes>
+                            </artifactSet>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.google.zxing</pattern>
+                                    <shadedPattern>uz.sbg.kmreplacement.shaded.zxing</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
