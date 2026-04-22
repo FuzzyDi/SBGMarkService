@@ -1,0 +1,38 @@
+"""Enum-контракты. Значения должны 1:1 совпадать со строками из Java-плагина."""
+from enum import Enum
+
+
+class MarkStatus(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    RESERVED = "RESERVED"
+    SOLD = "SOLD"
+    RETURN_RESERVED = "RETURN_RESERVED"
+
+
+class ReservationType(str, Enum):
+    SALE = "SALE"
+    RETURN = "RETURN"
+
+
+class ResolveResult(str, Enum):
+    ACCEPT_SCANNED = "ACCEPT_SCANNED"
+    ACCEPT_AUTO_SELECTED = "ACCEPT_AUTO_SELECTED"
+    REJECT_NO_CANDIDATE = "REJECT_NO_CANDIDATE"
+    HARD_REJECT = "HARD_REJECT"
+
+
+class MarkSource(str, Enum):
+    SCANNED = "SCANNED"
+    AUTO_SELECTED = "AUTO_SELECTED"
+
+
+class ErrorCode(str, Enum):
+    NONE = "NONE"
+    NO_CANDIDATE = "NO_CANDIDATE"
+    INVALID_MARK_FOR_PRODUCT = "INVALID_MARK_FOR_PRODUCT"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+    RESERVE_CONFLICT = "RESERVE_CONFLICT"
+    ALREADY_RETURNED = "ALREADY_RETURNED"
+    INVALID_STATE = "INVALID_STATE"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+    INTERNAL_ERROR = "INTERNAL_ERROR"

@@ -1,0 +1,34 @@
+services:
+  postgres-py:
+    image: postgres:15
+    container_name: sbg-marking-postgres-py
+    environment:
+      POSTGRES_DB: sbg_marking_py
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-py:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sbg_marking_py"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server-py:
+    build: .
+    container_name: sbg-marking-server-py
+    depends_on:
+      postgres-py:
+        condition: service_healthy
+    environment:
+      SBG_MARKING_DB_URL: postgresql+psycopg://postgres:postgres@postgres-py:5432/sbg_marking_py
+      SBG_MARKING_PORT: 8090
+      SBG_MARKING_RESERVATION_TTL_SEC: 900
+      SBG_MARKING_LOG_LEVEL: INFO
+    ports:
+      - "8090:8090"
+
+volumes:
+  pgdata-py:
