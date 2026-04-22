@@ -40,6 +40,18 @@ public interface ReplacementStateRepository {
      */
     ReplacementState findQrShownByOriginalInBase(CorrelationKey key, String scannedKm);
 
+    /**
+     * Найти {@link Status#REPLACEMENT_ACCEPTED} запись внутри базового ключа, у
+     * которой {@code originalKm == scannedKm}. Сценарий: кассир удалил позицию,
+     * для которой мы уже подменили КМ, и SR10 повторно просит отсканировать КМ.
+     * Кассир сканирует физический "плохой" КМ с товара — мы узнаём запись и
+     * снова открываем тот же QR с тем же {@code replacementKm}, не тревожа
+     * backend (резерв по-прежнему валиден).
+     *
+     * @return запись или null
+     */
+    ReplacementState findAcceptedByOriginalInBase(CorrelationKey key, String scannedKm);
+
     /** Сохранить (create/update) запись. Идентификатор — {@code (key, attemptIndex)}. */
     void save(ReplacementState state);
 

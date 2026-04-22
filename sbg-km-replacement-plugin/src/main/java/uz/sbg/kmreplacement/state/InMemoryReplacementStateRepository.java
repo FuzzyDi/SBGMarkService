@@ -57,6 +57,19 @@ public final class InMemoryReplacementStateRepository implements ReplacementStat
     }
 
     @Override
+    public ReplacementState findAcceptedByOriginalInBase(CorrelationKey key, String scannedKm) {
+        if (key == null || scannedKm == null || scannedKm.isEmpty()) return null;
+        Map<Integer, ReplacementState> bucket = store.get(key);
+        if (bucket == null) return null;
+        for (ReplacementState s : bucket.values()) {
+            if (s.getStatus() == Status.REPLACEMENT_ACCEPTED && scannedKm.equals(s.getOriginalKm())) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    @Override
     public void save(ReplacementState state) {
         if (state == null || state.getCorrelationKey() == null) return;
         CorrelationKey key = state.getCorrelationKey();

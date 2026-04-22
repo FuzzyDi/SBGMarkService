@@ -272,6 +272,73 @@ public class StateMachineTest {
     }
 
     // ---------------------------------------------------------------
+    // Сценарий: позиция с подменой удалена, SR10 снова просит КМ,
+    // кассир сканирует оригинальный плохой КМ → реоткрываем тот же QR.
+    // Резолвер НЕ вызывается (иначе ScriptedResolver бы упал).
+    // ---------------------------------------------------------------
+    @Test
+    public void reopenOverlay_afterPositionDelete_onOriginalRescan() {
+        CorrelationKey key = CorrelationKey.of(SHOP, POS, RECEIPT, GTIN);
+        ResolveContext ctx = ctx();
+
+        // 1) Обычный цикл замены: A плохой → QR (KM_B), B → ACCEPT_CLOSE_OVERLAY.
+        resolver.enqueue(ResolveOutcome.replaceWith(KM_B, "RID-1"));
+        Decision d1 = sm.onScan(KM_A, key, ctx, RECEIPT_NUM);
+        assertEquals(1, d1.getAttemptIndex());
+
+        resolver.enqueue(ResolveOutcome.valid());
+        Decision d2 = sm.onScan(KM_B, key, ctx, RECEIPT_NUM);
+        assertEquals(DecisionKind.ACCEPT_CLOSE_OVERLAY, d2.getKind());
+        ReplacementState after = only(repo.findAll(key));
+        assertEquals(Status.REPLACEMENT_ACCEPTED, after.getStatus());
+        assertEquals("RID-1", after.getReservationId());
+
+        // 2) Кассир удаляет позицию и SR10 снова просит КМ. Кассир сканирует
+        //    тот же плохой KM_A. Резолвер НЕ должен быть вызван — очередь пуста.
+        Decision d3 = sm.onScan(KM_A, key, ctx, RECEIPT_NUM);
+        assertEquals(DecisionKind.REJECT, d3.getKind());
+        assertTrue(d3.shouldShowOverlay());
+        assertEquals("reopened with the same attemptIndex", 1, d3.getAttemptIndex());
+        assertEquals("reopened with the same replacementKm", KM_B, d3.getReplacementKm());
+
+        ReplacementState reopened = only(repo.findAll(key));
+        assertEquals(Status.QR_SHOWN, reopened.getStatus());
+        assertEquals("reservation preserved", "RID-1", reopened.getReservationId());
+
+        // 3) Кассир снова сканирует KM_B → закрываем overlay, возвращаемся в ACCEPTED.
+        resolver.enqueue(ResolveOutcome.valid());
+        Decision d4 = sm.onScan(KM_B, key, ctx, RECEIPT_NUM);
+        assertEquals(DecisionKind.ACCEPT_CLOSE_OVERLAY, d4.getKind());
+        assertEquals(Status.REPLACEMENT_ACCEPTED, only(repo.findAll(key)).getStatus());
+    }
+
+    // ---------------------------------------------------------------
+    // replacement.enabled=false → реоткрытия нет, даже если ACCEPTED запись есть.
+    // ---------------------------------------------------------------
+    @Test
+    public void reopenOverlay_disabledInValidatorMode() {
+        // Готовим ACCEPTED-запись вручную (обычный режим).
+        CorrelationKey key = CorrelationKey.of(SHOP, POS, RECEIPT, GTIN);
+        resolver.enqueue(ResolveOutcome.replaceWith(KM_B));
+        sm.onScan(KM_A, key, ctx(), RECEIPT_NUM);
+        resolver.enqueue(ResolveOutcome.valid());
+        sm.onScan(KM_B, key, ctx(), RECEIPT_NUM);
+        assertEquals(Status.REPLACEMENT_ACCEPTED, only(repo.findAll(key)).getStatus());
+
+        // Переключаемся в режим валидатора и сканируем тот же KM_A.
+        config = new KmReplacementConfig("http://x", 3000, 5000, 60_000, 2, false, false);
+        sm = new StateMachine(resolver, repo, config, clock);
+
+        // В режиме валидатора резолвер вызывается как обычно; вернёт REPLACE_WITH.
+        // Ожидаем plain REJECT без overlay, ACCEPTED-запись не трогается.
+        resolver.enqueue(ResolveOutcome.replaceWith(KM_B));
+        Decision d = sm.onScan(KM_A, key, ctx(), RECEIPT_NUM);
+        assertEquals(DecisionKind.REJECT, d.getKind());
+        assertFalse(d.shouldShowOverlay());
+        assertEquals(Status.REPLACEMENT_ACCEPTED, only(repo.findAll(key)).getStatus());
+    }
+
+    // ---------------------------------------------------------------
     // replacement.enabled=false → плагин как обычный валидатор:
     // REPLACE_WITH от резолвера понижается до REJECT без overlay и без state.
     // ---------------------------------------------------------------

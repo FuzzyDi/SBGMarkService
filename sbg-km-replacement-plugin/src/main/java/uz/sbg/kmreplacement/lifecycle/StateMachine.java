@@ -76,6 +76,28 @@ public final class StateMachine {
             }
         }
 
+        // Реоткрытие уже подтверждённой замены. Сценарий: кассир удалил позицию,
+        // для которой мы ранее выдали замену, и SR10 опять просит отсканировать
+        // КМ. Кассир сканирует физический "плохой" КМ — мы находим запись в
+        // REPLACEMENT_ACCEPTED с тем же originalKm и просто показываем тот же
+        // QR снова, не дёргая backend (резерв всё ещё валиден, тот же rid).
+        // Работает только при включённой автоподмене.
+        if (config.isReplacementEnabled()) {
+            ReplacementState accepted = repo.findAcceptedByOriginalInBase(key, scannedKm);
+            if (accepted != null) {
+                accepted.setStatus(Status.QR_SHOWN);
+                accepted.setExpiresAtMs(now + config.getQrTtlMs());
+                repo.save(accepted);
+                log.info("[SBG-KMR-SM] REOPEN overlay after position delete | {} | rid={}",
+                        accepted, accepted.getReservationId());
+                return Decision.rejectShowOverlay(
+                        accepted.getCorrelationKey(),
+                        accepted.getAttemptIndex(),
+                        "Повторно отсканируйте заменяющий КМ с экрана кассы",
+                        accepted.getReplacementKm());
+            }
+        }
+
         ResolveOutcome outcome = resolver.resolve(scannedKm, ctx);
         log.info("[SBG-KMR-SM] resolve | key={} | scanned='{}' | outcome={}",
                 key, abbreviate(scannedKm), outcome.getKind());
