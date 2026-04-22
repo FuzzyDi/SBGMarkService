@@ -82,9 +82,10 @@ public final class StateMachine {
 
         switch (outcome.getKind()) {
             case VALID:
-                return onValid(scannedKm, key, now);
+                return onValid(scannedKm, key, outcome.getReservationId(), now);
             case REPLACE_WITH:
-                return onNeedReplacement(scannedKm, key, ctx, outcome.getReplacementKm(), now, receiptNumber);
+                return onNeedReplacement(scannedKm, key, ctx,
+                        outcome.getReplacementKm(), outcome.getReservationId(), now, receiptNumber);
             case UNAVAILABLE:
                 return onUnavailable(key, outcome.getMessage());
             case ERROR:
@@ -97,7 +98,7 @@ public final class StateMachine {
     // Ветки
     // =========================================================================
 
-    private Decision onValid(String scannedKm, CorrelationKey key, long now) {
+    private Decision onValid(String scannedKm, CorrelationKey key, String reservationId, long now) {
         // 1) Глобальный поиск: если scanned совпадает с замещающим КМ какой-то
         //    активной QR_SHOWN записи (в любом чеке/товаре) — закрываем её overlay.
         //    Обычно такое совпадение происходит для той же позиции, где ожидалась
@@ -106,9 +107,17 @@ public final class StateMachine {
         ReplacementState targeted = repo.findQrShownByReplacement(scannedKm);
         if (targeted != null) {
             targeted.setStatus(Status.REPLACEMENT_ACCEPTED);
-            targeted.setExpiresAtMs(now + 5L * 60_000L);   // продлеваем на 5 мин для диагностики
+            // Удерживаем запись долго — до eventReceiptFiscalized или cancel.
+            // Expiration-scheduler терминальные записи больше не чистит (см. TtlScheduler).
+            targeted.setExpiresAtMs(now + Long.MAX_VALUE / 2);
+            // Backend может выдать НОВЫЙ reservationId на второй скан (scan B =
+            // ACCEPT_SCANNED); используем именно его для sold-confirm.
+            if (reservationId != null && !reservationId.isEmpty()) {
+                targeted.setReservationId(reservationId);
+            }
             repo.save(targeted);
-            log.info("[SBG-KMR-SM] ACCEPT close overlay | {} | scanned==replacement", targeted);
+            log.info("[SBG-KMR-SM] ACCEPT close overlay | {} | scanned==replacement | rid={}",
+                    targeted, targeted.getReservationId());
             return Decision.acceptCloseOverlay(targeted.getCorrelationKey(), targeted.getAttemptIndex());
         }
 
@@ -122,6 +131,7 @@ public final class StateMachine {
                                        CorrelationKey key,
                                        ResolveContext ctx,
                                        String proposedReplacement,
+                                       String reservationId,
                                        long now,
                                        int receiptNumber) {
 
@@ -161,6 +171,7 @@ public final class StateMachine {
                 1,
                 receiptNumber
         );
+        fresh.setReservationId(reservationId);
         repo.save(fresh);
         log.info("[SBG-KMR-SM] REJECT show overlay | {} | ttl={}ms", fresh, config.getQrTtlMs());
         return Decision.rejectShowOverlay(

@@ -46,6 +46,9 @@ public interface ReplacementStateRepository {
     /** Удалить запись по паре {@code (key, attemptIndex)}. */
     void remove(CorrelationKey key, int attemptIndex);
 
+    /** Все записи, принадлежащие данному чеку (во всех статусах). */
+    List<ReplacementState> findByReceipt(int receiptNumber);
+
     /** Удалить все записи, у которых {@code receiptNumber} совпадает. */
     void removeByReceipt(int receiptNumber);
 

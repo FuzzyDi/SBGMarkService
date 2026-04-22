@@ -81,6 +81,19 @@ public final class InMemoryReplacementStateRepository implements ReplacementStat
     }
 
     @Override
+    public List<ReplacementState> findByReceipt(int receiptNumber) {
+        List<ReplacementState> result = new ArrayList<ReplacementState>();
+        for (Map<Integer, ReplacementState> bucket : store.values()) {
+            for (ReplacementState s : bucket.values()) {
+                if (s.getReceiptNumber() == receiptNumber) {
+                    result.add(s);
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
     public void removeByReceipt(int receiptNumber) {
         Iterator<Map.Entry<CorrelationKey, Map<Integer, ReplacementState>>> it = store.entrySet().iterator();
         while (it.hasNext()) {

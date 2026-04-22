@@ -14,18 +14,27 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Фоновый компонент, раз в секунду:
- * <ul>
- *   <li>ищет {@code QR_SHOWN} записи с {@code expiresAt &lt;= now} → гасит overlay + ставит EXPIRED;</li>
- *   <li>удаляет терминальные записи старше 5 минут.</li>
- * </ul>
+ * Фоновый компонент. Раз в секунду ищет {@code QR_SHOWN} записи с
+ * {@code expiresAt &lt;= now} → гасит overlay + ставит EXPIRED.
+ *
+ * <p>Терминальные записи ({@code REPLACEMENT_ACCEPTED}, {@code EXPIRED},
+ * {@code FAILED}) этот scheduler НЕ удаляет. Удаление терминальных записей
+ * — ответственность обработчика {@code eventReceiptFiscalized} плагина,
+ * который в этот момент решает для каждой: нужно ли вызвать
+ * {@code sold-confirm} (позиция продана) или {@code sale-release} (позиция
+ * удалена / чек отменён).</p>
+ *
+ * <p>Очистка EXPIRED-записей, если фискализации так и не случилось
+ * (брошенный чек, перезапуск кассы и т.п.), происходит лениво —
+ * {@code eventReceiptFiscalized} их зачистит одновременно с остальными
+ * записями по receiptNumber, либо записи просто теряются при перезапуске
+ * вместе с in-memory хранилищем.</p>
  */
 public final class ExpirationScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(ExpirationScheduler.class);
 
     private static final long TICK_SEC = 1L;
-    private static final long TERMINAL_RETENTION_MS = 5L * 60_000L;
 
     private final ReplacementStateRepository repo;
     private final QrOverlayService overlay;
@@ -69,10 +78,6 @@ public final class ExpirationScheduler {
                 repo.save(s);
                 overlay.hide(s.getCorrelationKey(), s.getAttemptIndex());
                 log.info("[SBG-KMR-TTL] overlay EXPIRED | {}", s);
-            }
-            List<ReplacementState> old = repo.findTerminalOlderThan(now - TERMINAL_RETENTION_MS);
-            for (ReplacementState s : old) {
-                repo.remove(s.getCorrelationKey(), s.getAttemptIndex());
             }
         } catch (Throwable t) {
             log.error("[SBG-KMR-TTL] tick failed: {}", t.getMessage(), t);
